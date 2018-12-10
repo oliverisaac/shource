@@ -20,9 +20,9 @@ function main()
     local no_print_tag="$4"
     local run="$5"
 
-    local src_dir="$( dirname "$BASH_SOURCE" )"
+    local src_dir="$( dirname "$( readlink -f "$0" )" )"
     src_dir=$( cd "$src_dir" && pwd -P )
-    local self="$src_dir/$( basename "$BASH_SOURCE" )"
+    local self="$src_dir/$( basename "$( readlink -f "$0" )" )"
 
     local target_dir=$( dirname "$source" )
     target_dir=$( cd $target_dir && pwd -P )
@@ -67,6 +67,9 @@ function main()
             if [[ -e "$src_dir/$func_name" ]]; then
                 "$self" "$src_dir/$func_name" --no-print-tag
                 continue
+            else
+                log 0 "ERROR: You tried to shource $func_name but it does not exist in $src_dir!"
+                exit 1
             fi
         fi
 

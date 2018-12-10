@@ -1,0 +1,29 @@
+function freq_to_seconds()
+{
+    local freq="$1"
+    local time=0
+
+    freq=$( echo "$freq" | tr '[:upper:]' '[:lower:]' | tr -d -c '[0-9dhms]' )
+
+    local day=0 hr=0 min=0 sec=0
+
+    if [[ $freq =~ ([0-9]+)d ]]; then
+        day=${BASH_REMATCH[1]}
+    fi
+
+    if [[ $freq =~ ([0-9]+)h ]]; then
+        hr=${BASH_REMATCH[1]}
+    fi
+
+    if [[ $freq =~ ([0-9]+)m ]]; then
+        min=${BASH_REMATCH[1]}
+    fi
+
+    if [[ $freq =~ ([0-9]+)(s|$) ]]; then
+        sec=${BASH_REMATCH[1]}
+    fi
+
+    local time=$(( $day * ( 24 * 60 * 60 ) + $hr * ( 60 * 60 ) + $min * ( 60 ) + $sec ))
+    echo "$time"
+}
+

@@ -1,0 +1,28 @@
+# On exit is called on every exit
+function _on_exit()
+{
+    # Cleanup code goes here
+    local exit_status="$?"
+}
+
+function _on_term()
+{
+    echo "Terminated!" >&2
+    # A termination also tends to call an error, so we block that
+    trap '' ERR
+}
+
+function _on_error()
+{
+    local lineno=$1
+    shift
+    local pipe_fails=( "${@}" )
+    echo "ERROR (${pipe_fails[@]}) on line $1: Most recent call last:" >&2
+    _print_stack >&2
+}
+
+shource _print_stack()
+
+trap '_on_term' HUP TERM INT
+trap '_on_error $LINENO ${PIPESTATUS[@]}' ERR
+trap '_on_exit' EXIT
