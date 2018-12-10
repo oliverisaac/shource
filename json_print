@@ -1,0 +1,34 @@
+source json_escape()
+function json_print()
+{
+    local args=( "${@}" )
+    local num_args=${#args[@]}
+
+    printf "%s" "{"
+    for (( i=0; i<$num_args; i=i+2 )); do
+        local format="%s"
+        local key="${args[$i]}"
+        local value="${args[$i+1]}"
+
+        local type="${key##*:}"
+        if [[ $type != "" ]]; then
+            format="%$type"
+        fi
+
+        # IF it's a string type, then wrap in quotes
+        if [[ $format =~ s$ ]]; then
+            format="\"$format\""
+            value=$( json_escape "$value" )
+        fi
+
+        local comma=","
+        if [[ $i -eq 0 ]]; then
+            comma=""
+        fi
+
+        printf -- "$comma \"%s\": $format" "${key%%:*}" "$value"
+    done
+
+    printf "%s\n" "}"
+}
+

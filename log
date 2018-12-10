@@ -1,0 +1,19 @@
+source json_print()
+
+function log()
+{
+    local level="$1"
+    shift
+    local args=( "${@}" )
+    if [[ $level -le ${LOG_LEVEL:-0} ]]; then
+        local time=$( date "+%Y-%m-%d %H:%M:%S.%3N" )
+        local message="${@}"
+
+        if [[ ${JSON_LOG_FORMAT:-false} == "false" ]]; then
+            echo "$message [log $level]: $message" >&2
+        else
+            time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
+            json_print time:s "$time" level:d "$level" msg:s "$message" >&2
+        fi
+    fi
+}
