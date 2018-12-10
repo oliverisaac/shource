@@ -17,3 +17,14 @@ Shource has three options:
 `--no-print-tag`: Do not print the tag
 `--run`: Execute the script after it's created. If you do not pass `--create` then the file will be saved to a temporary file then executed from there
 
+To add a function to your code, you simply place a line like this:
+
+```
+shource function_name()
+```
+
+Then, call `shource` referencing your source file:
+
+```
+shource example.sh.src --create
+```
