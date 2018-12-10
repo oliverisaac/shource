@@ -1,0 +1,59 @@
+# Loops through passed in args and sets variables for each of them
+# Call like this: _parse_args help refresh debug -- "${@}"
+function parse_args()
+{
+    local boolean_flags=()
+    local input_args=( "${@}" )
+    local num_args=${#input_args[@]}
+    local this_arg i key value
+
+    for (( i=0; i<num_args; i++ )); do
+        this_arg="${input_args[$i]}"
+        log 4 "$i : $this_arg"
+        if [[ $this_arg == "--" ]]; then
+            i=$(( i + 1 ))
+            break
+        fi
+        boolean_flags+=( "$( echo "${this_arg}" | tr '_-' '.' | sed 's/^-*//' )" )
+    done
+
+    local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )
+
+    local populate_args=false
+    declare -g -a _args=()
+    for (( ; i<num_args; i++ )); do
+        this_arg="${input_args[$i]}"
+        log 1 "$i : $this_arg"
+        if $populate_args; then
+            log 2 "Appending $this_arg to _args[]"
+            _args+=( "$this_arg" )
+            continue
+        fi
+
+        if [[ $this_arg == "--" ]]; then
+            populate_args=true
+            continue
+        fi
+
+        key=""
+        value=true
+        # Boolean flags
+        if [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ ^--(${boolean_regex})$ ]]; then
+            key="${BASH_REMATCH[1]}"
+        elif [[ $this_arg =~ ^--([^=]+)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+        elif [[ $this_arg =~ ^--(.+)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            ((i++))
+            value="${input_args[$i]}"
+        fi
+        key="${key//-/_}"
+        if [[ $key == "" ]]; then
+            _args+=( "$this_arg" )
+        else
+            log 1 "Setting $key to $value"
+            declare -g "$key"="$value"
+        fi
+    done
+}

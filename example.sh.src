@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+shource log()
+
+export JSON_LOG_FORMAT=true
+log 0 "Hello"

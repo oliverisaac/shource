@@ -1,4 +1,4 @@
-source json_escape()
+shource json_escape()
 function json_print()
 {
     local args=( "${@}" )

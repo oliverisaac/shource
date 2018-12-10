@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4
+
+set -e # Exit on any error. Use `COMMAND || true` to nullify
+set -E # Functions inherit error trap
+set -u # Error on unset variables. Use ${var:-alternate value} to bypass
+set -f # Error on failed file globs (e.g. *.txt )
+set -o pipefail # Failed commands in pipes cause the whole pipe to fail
+
+LOG_LEVEL=0
+
+readonly tag="# source code generated using shource: https://github.com/oliverisaac/shource"
+
+function main()
+{
+    local source="$1"
+    local create="$2"
+    local overwrite="$3"
+    local no_print_tag="$4"
+    local run="$5"
+
+    local src_dir="$( dirname "$BASH_SOURCE" )"
+    src_dir=$( cd "$src_dir" && pwd -P )
+    local self="$src_dir/$( basename "$BASH_SOURCE" )"
+
+    local target_dir=$( dirname "$source" )
+    target_dir=$( cd $target_dir && pwd -P )
+
+    local default_write_target="/dev/stdout"
+    local write_target="$default_write_target"
+
+    local source_file="$target_dir/$( basename "$source" )"
+    if $create; then
+        local regex='[.]src$'
+        if ! [[ $source_file =~ $regex ]]; then
+            log 0 "Your filename must end with .src to trigger creation"
+            exit 2
+        fi
+
+        target_file="${source_file%.src}"
+        if [[ -e "$target_file" ]] && ! $overwrite; then
+            local second_line=$( cat "$target_file" | head -n2 | tail -n1 )
+            if [[ $second_line != "$tag" ]]; then
+                log 0 "You will accidently overwrite $target_file if you continue! Use --force to allow overwrites"
+                exit 4
+            fi
+        fi
+
+        write_target="$target_file"
+    fi
+
+    local temp_write=$(mktemp)
+
+    local line_index=0
+    local print_tag=true
+    if $no_print_tag; then
+        print_tag=false
+    fi
+
+    while IFS='' read -r line; do
+        line_index=$(( line_index + 1 ))
+
+        local regex='^shource ([a-zA-Z_0-9]+)\(\) *$'
+        if [[ $line =~ $regex ]]; then
+            local func_name="${BASH_REMATCH[1]}"
+            if [[ -e "$src_dir/$func_name" ]]; then
+                "$self" "$src_dir/$func_name" --no-print-tag
+                continue
+            fi
+        fi
+
+        if $print_tag && [[ $line_index == 1 ]] && ! [[ $line =~ ^#! ]]; then
+            printf "%s\n" "#!/usr/bin/env bash" "$tag"
+            print_tag=false
+        fi
+
+        printf "%s\n" "$line"
+
+        if $print_tag && [[ $line_index == 1 ]]; then
+            printf "%s\n" "$tag"
+            print_tag=false
+        fi
+    done < <( cat "$source_file" )  > "$temp_write"
+
+    cat "$temp_write" > "$write_target"
+    if [[ $write_target != $default_write_target ]]; then
+        chmod +x "$write_target"
+    fi
+
+    if $run; then
+        chmod +x "$temp_write"
+        "$temp_write"
+    fi
+
+    rm "$temp_write"
+    return 0
+}
+
+# On exit is called on every exit
+function _on_exit()
+{
+    # Cleanup code goes here
+    local exit_status="$?"
+}
+
+function _on_term()
+{
+    echo "Terminated!" >&2
+    # A termination also tends to call an error, so we block that
+    trap '' ERR
+}
+
+shource _on_error()
+shource parse_args()
+shource log()
+
+function _display_help()
+{
+    cat - > >( sed -r -e "s/^ {,8}//" ) <<EOF
+        Sample help file
+        TADA!
+EOF
+}
+
+trap '_on_term' HUP TERM INT
+trap '_on_error $LINENO ${PIPESTATUS[@]}' ERR
+trap '_on_exit' EXIT
+
+# Check if any of the args are a cry for help
+if echo "${@}" | grep -q -wiEe "-h|--help|help"; then
+    _display_help
+    exit 4
+fi
+
+# Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
+parse_args run no_print_tag create force -- "${@}"
+main "${_args[0]}" ${create:-false} ${force:-false} ${no_print_tag:-false} ${run:-false}
+
+exit $?
+
+

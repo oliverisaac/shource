@@ -1,4 +1,4 @@
-source json_print()
+shource json_print()
 
 function log()
 {

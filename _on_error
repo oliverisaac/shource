@@ -1,0 +1,10 @@
+shource _print_stack()
+
+function _on_error()
+{
+    local lineno=$1
+    shift
+    local pipe_fails=( "${@}" )
+    echo "ERROR (${pipe_fails[@]}) on line $1: Most recent call last:" >&2
+    _print_stack >&2
+}

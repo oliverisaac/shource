@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 # vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4
 
 set -e # Exit on any error. Use `COMMAND || true` to nullify
@@ -7,36 +8,92 @@ set -u # Error on unset variables. Use ${var:-alternate value} to bypass
 set -f # Error on failed file globs (e.g. *.txt )
 set -o pipefail # Failed commands in pipes cause the whole pipe to fail
 
-LOG_LEVEL=2
+LOG_LEVEL=0
 
-readonly tag="# source code generated using bash-source"
+readonly tag="# source code generated using shource: https://github.com/oliverisaac/shource"
 
 function main()
 {
     local source="$1"
+    local create="$2"
+    local overwrite="$3"
+    local no_print_tag="$4"
+    local run="$5"
+
     local src_dir="$( dirname "$BASH_SOURCE" )"
     src_dir=$( cd "$src_dir" && pwd -P )
-
     local self="$src_dir/$( basename "$BASH_SOURCE" )"
 
-    local line_index=0
-    while IFS='' read line; do
-        (( line_index++ ))
+    local target_dir=$( dirname "$source" )
+    target_dir=$( cd $target_dir && pwd -P )
 
-        local regex='^source ([a-zA-Z_0-9]+)\(\) *$'
+    local default_write_target="/dev/stdout"
+    local write_target="$default_write_target"
+
+    local source_file="$target_dir/$( basename "$source" )"
+    if $create; then
+        local regex='[.]src$'
+        if ! [[ $source_file =~ $regex ]]; then
+            log 0 "Your filename must end with .src to trigger creation"
+            exit 2
+        fi
+
+        target_file="${source_file%.src}"
+        if [[ -e "$target_file" ]] && ! $overwrite; then
+            local second_line=$( cat "$target_file" | head -n2 | tail -n1 )
+            if [[ $second_line != "$tag" ]]; then
+                log 0 "You will accidently overwrite $target_file if you continue! Use --force to allow overwrites"
+                exit 4
+            fi
+        fi
+
+        write_target="$target_file"
+    fi
+
+    local temp_write=$(mktemp)
+
+    local line_index=0
+    local print_tag=true
+    if $no_print_tag; then
+        print_tag=false
+    fi
+
+    while IFS='' read -r line; do
+        line_index=$(( line_index + 1 ))
+
+        local regex='^shource ([a-zA-Z_0-9]+)\(\) *$'
         if [[ $line =~ $regex ]]; then
             local func_name="${BASH_REMATCH[1]}"
             if [[ -e "$src_dir/$func_name" ]]; then
-                "$self" "$src_dir/$func_name"
+                "$self" "$src_dir/$func_name" --no-print-tag
                 continue
             fi
         fi
 
-        echo "$line"
-        if [[ $line_index == 1 ]]; then
-            echo "$tag"
+        if $print_tag && [[ $line_index == 1 ]] && ! [[ $line =~ ^#! ]]; then
+            printf "%s\n" "#!/usr/bin/env bash" "$tag"
+            print_tag=false
         fi
-    done < <( cat "$source" )
+
+        printf "%s\n" "$line"
+
+        if $print_tag && [[ $line_index == 1 ]]; then
+            printf "%s\n" "$tag"
+            print_tag=false
+        fi
+    done < <( cat "$source_file" )  > "$temp_write"
+
+    cat "$temp_write" > "$write_target"
+    if [[ $write_target != $default_write_target ]]; then
+        chmod +x "$write_target"
+    fi
+
+    if $run; then
+        chmod +x "$temp_write"
+        "$temp_write"
+    fi
+
+    rm "$temp_write"
     return 0
 }
 
@@ -53,6 +110,8 @@ function _on_term()
     # A termination also tends to call an error, so we block that
     trap '' ERR
 }
+
+
 
 function _print_stack()
 {
@@ -71,6 +130,7 @@ function _print_stack()
    done
 }
 
+
 function _on_error()
 {
     local lineno=$1
@@ -79,7 +139,6 @@ function _on_error()
     echo "ERROR (${pipe_fails[@]}) on line $1: Most recent call last:" >&2
     _print_stack >&2
 }
-
 # Loops through passed in args and sets variables for each of them
 # Call like this: _parse_args help refresh debug -- "${@}"
 function parse_args()
@@ -131,11 +190,14 @@ function parse_args()
             value="${input_args[$i]}"
         fi
         key="${key//-/_}"
-        log 1 "Setting $key to $value"
-        declare -g "$key"="$value"
+        if [[ $key == "" ]]; then
+            _args+=( "$this_arg" )
+        else
+            log 1 "Setting $key to $value"
+            declare -g "$key"="$value"
+        fi
     done
 }
-
 function json_escape()
 {
     local str="$1"
@@ -184,6 +246,7 @@ function json_print()
     printf "%s\n" "}"
 }
 
+
 function log()
 {
     local level="$1"
@@ -196,6 +259,7 @@ function log()
         if [[ ${JSON_LOG_FORMAT:-false} == "false" ]]; then
             echo "$message [log $level]: $message" >&2
         else
+            time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
             json_print time:s "$time" level:d "$level" msg:s "$message" >&2
         fi
     fi
@@ -220,8 +284,8 @@ if echo "${@}" | grep -q -wiEe "-h|--help|help"; then
 fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-# parse_args -- "${@}"
-main "${@}"
+parse_args run no_print_tag create force -- "${@}"
+main "${_args[0]}" ${create:-false} ${force:-false} ${no_print_tag:-false} ${run:-false}
 
 exit $?
 
