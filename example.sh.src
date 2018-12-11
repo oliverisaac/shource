@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-shource log()
+shource oliverisaac/shource-scripts:hello_world()
 
-export JSON_LOG_FORMAT=true
-log 0 "Hello"
+hello_world

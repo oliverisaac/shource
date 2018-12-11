@@ -25,9 +25,9 @@ function parse_args()
     declare -g -a _args=()
     for (( ; i<num_args; i++ )); do
         this_arg="${input_args[$i]}"
-        log 1 "$i : $this_arg"
+        log 4 "$i : $this_arg"
         if $populate_args; then
-            log 2 "Appending $this_arg to _args[]"
+            log 4 "Appending $this_arg to _args[]"
             _args+=( "$this_arg" )
             continue
         fi
@@ -54,7 +54,7 @@ function parse_args()
         if [[ $key == "" ]]; then
             _args+=( "$this_arg" )
         else
-            log 1 "Setting $key to $value"
+            log 4 "Setting $key to $value"
             declare -g "$key"="$value"
         fi
     done

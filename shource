@@ -11,6 +11,8 @@ set -o pipefail # Failed commands in pipes cause the whole pipe to fail
 LOG_LEVEL=0
 
 readonly tag="# source code generated using shource: https://github.com/oliverisaac/shource"
+readonly self_dir="$( dirname "$( readlink -f "$0" )" )"
+readonly self="$self_dir/$( basename "$( readlink -f "$0" )" )"
 
 
 # Loops through passed in args and sets variables for each of them
@@ -38,9 +40,9 @@ function parse_args()
     declare -g -a _args=()
     for (( ; i<num_args; i++ )); do
         this_arg="${input_args[$i]}"
-        log 1 "$i : $this_arg"
+        log 4 "$i : $this_arg"
         if $populate_args; then
-            log 2 "Appending $this_arg to _args[]"
+            log 4 "Appending $this_arg to _args[]"
             _args+=( "$this_arg" )
             continue
         fi
@@ -67,7 +69,7 @@ function parse_args()
         if [[ $key == "" ]]; then
             _args+=( "$this_arg" )
         else
-            log 1 "Setting $key to $value"
+            log 4 "Setting $key to $value"
             declare -g "$key"="$value"
         fi
     done
@@ -188,6 +190,38 @@ trap '_on_term' HUP TERM INT
 trap '_on_error $LINENO ${PIPESTATUS[@]}' ERR
 trap '_on_exit' EXIT
 
+# This function receives a shource "path" and turns it into a file that can be read
+function shource_to_filepath()
+{
+    local shource="$1"
+    local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
+    local regex="^shource +((.*):)?([a-zA-Z0-9_]+)\\(\\) *$"
+    local src_dir=""
+    local src_file=""
+
+    if [[ $shource =~ $regex ]]; then
+        src_dir="${BASH_REMATCH[2]}"
+        src_file="${BASH_REMATCH[3]}"
+
+        local type='url'
+        if [[ $src_dir == "" ]]; then
+            type='local'
+        elif [[ $src_dir =~ $github_regex ]]; then
+            type='github'
+        fi
+
+        if [[ $type == 'local' ]]; then
+            echo "$self_dir/shources/$src_file"
+        else
+            return 1
+        fi
+    else
+        return 1
+    fi
+
+    return 0
+}
+
 function main()
 {
     local source="$1"
@@ -197,10 +231,9 @@ function main()
     local run="$5"
     local no_print_shebang="$6"
     local no_make_exec="$7"
+    shift 7
+    local args=( "${@}" )
 
-    local src_dir="$( dirname "$( readlink -f "$0" )" )"
-    src_dir=$( cd "$src_dir" && pwd -P )
-    local self="$src_dir/$( basename "$( readlink -f "$0" )" )"
 
     local target_dir=$( dirname "$source" )
     target_dir=$( cd $target_dir && pwd -P )
@@ -237,19 +270,18 @@ function main()
     fi
 
     local print_this_line=true
+    local func_path
     while IFS='' read -r line; do
         print_this_line=true
         line_index=$(( line_index + 1 ))
 
-        local regex='^shource ([a-zA-Z_0-9]+)\(\) *$'
+        local regex='^shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
-            local func_name="${BASH_REMATCH[1]}"
-            local func_path="$src_dir/shources/$func_name"
-            if [[ -e "$func_path" ]]; then
+            if func_path=$( shource_to_filepath "$line" ); then
                 "$self" "$func_path" --no-print-tag --no-print-shebang --no-make-exec
                 continue
             else
-                log 0 "ERROR: You tried to shource $func_name but it does not exist in $src_dir!"
+                log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
                 exit 1
             fi
         fi
@@ -269,14 +301,17 @@ function main()
         echo "$tag" | sed -i"" -e '1 r /dev/stdin' "$temp_write"
     fi
 
-    cat "$temp_write" > "$write_target"
-    if ! $no_make_exec && [[ $write_target != $default_write_target ]]; then
-        chmod +x "$write_target"
+    if ! $run; then
+        cat "$temp_write" > "$write_target"
+
+        if ! $no_make_exec && [[ $write_target != $default_write_target ]]; then
+            chmod +x "$write_target"
+        fi
     fi
 
     if $run; then
         chmod +x "$temp_write"
-        "$temp_write"
+        /usr/bin/env bash "$temp_write" "${args[@]}"
     fi
 
     rm "$temp_write"
@@ -300,8 +335,4 @@ fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
 parse_args run no_make_exec no_print_tag no_print_shebang create force -- "${@}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag:-false}" "${run:-false}" "${no_print_shebang:-false}" "${no_make_exec:-false}"
-
-exit $?
-
-
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag:-false}" "${run:-false}" "${no_print_shebang:-false}" "${no_make_exec:-false}" "${_args[@]:1}"; exit $?
