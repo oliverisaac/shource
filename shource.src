@@ -23,6 +23,7 @@ function main()
     local no_print_tag="$4"
     local run="$5"
     local no_print_shebang="$6"
+    local no_make_exec="$7"
 
     local src_dir="$( dirname "$( readlink -f "$0" )" )"
     src_dir=$( cd "$src_dir" && pwd -P )
@@ -72,7 +73,7 @@ function main()
             local func_name="${BASH_REMATCH[1]}"
             local func_path="$src_dir/shources/$func_name"
             if [[ -e "$func_path" ]]; then
-                "$self" "$func_path" --no-print-tag --no-print-shebang
+                "$self" "$func_path" --no-print-tag --no-print-shebang --no-make-exec
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_name but it does not exist in $src_dir!"
@@ -92,11 +93,11 @@ function main()
     done < <( cat "$source_file" )  > "$temp_write"
 
     if $print_tag; then
-        echo "$tag" | sed -i "" -e '1 r /dev/stdin' "$temp_write"
+        echo "$tag" | sed -i"" -e '1 r /dev/stdin' "$temp_write"
     fi
 
     cat "$temp_write" > "$write_target"
-    if [[ $write_target != $default_write_target ]]; then
+    if ! $no_make_exec && [[ $write_target != $default_write_target ]]; then
         chmod +x "$write_target"
     fi
 
@@ -125,8 +126,8 @@ if echo "${@}" | grep -q -wiEe "-h|--help|help"; then
 fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-parse_args run no_print_tag no_print_shebang create force -- "${@}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag:-false}" "${run:-false}" "${no_print_shebang:-false}"
+parse_args run no_make_exec no_print_tag no_print_shebang create force -- "${@}"
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag:-false}" "${run:-false}" "${no_print_shebang:-false}" "${no_make_exec:-false}"
 
 exit $?
 

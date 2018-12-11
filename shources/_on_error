@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 shource _print_stack()
 
 function _on_error()

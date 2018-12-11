@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # On exit is called on every exit
 function _on_exit()
 {

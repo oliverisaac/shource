@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Loops through passed in args and sets variables for each of them
 # Call like this: _parse_args help refresh debug -- "${@}"
 function parse_args()

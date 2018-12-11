@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 function freq_to_seconds()
 {
     local freq="$1"

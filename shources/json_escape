@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 function json_escape()
 {
     local str="$1"
