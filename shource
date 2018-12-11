@@ -64,8 +64,8 @@ function main()
         local regex='^shource ([a-zA-Z_0-9]+)\(\) *$'
         if [[ $line =~ $regex ]]; then
             local func_name="${BASH_REMATCH[1]}"
-            if [[ -e "$src_dir/$func_name" ]]; then
-                "$self" "$src_dir/$func_name" --no-print-tag
+            if [[ -e "$src_dir/shources/$func_name" ]]; then
+                "$self" "$src_dir/shources/$func_name" --no-print-tag
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_name but it does not exist in $src_dir!"
