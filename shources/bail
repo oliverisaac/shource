@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+
+export SCRIPT_PID="$$"
+function bail()
+{
+    local message="${@}"
+
+    echo "ERROR: $message" >&2
+
+    kill "$SCRIPT_PID"
+    return 1
+}

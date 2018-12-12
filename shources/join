@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+function join()
+{
+    local joiner="$1"
+    shift
+    local args=( "${@}" )
+
+    local first=true
+    local x
+
+    for x in "${args[@]}"; do
+        if ! $first; then
+            printf "%s" "$joiner"
+        else
+            first=false
+        fi
+        printf "%s" "$x"
+    done
+}
