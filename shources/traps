@@ -19,8 +19,15 @@ function _on_error()
     local lineno=$1
     shift
     local pipe_fails=( "${@}" )
-    echo "ERROR (${pipe_fails[@]}) on line $1: Most recent call last:" >&2
+    echo "ERROR (${pipe_fails[@]}) on line $lineno: Most recent call last:" >&2
     _print_stack >&2
+    local x
+    for x in ${pipe_fails[@]}; do
+        if [[ $x -ne 0 ]]; then
+            exit $x
+        fi
+    done
+    exit 1
 }
 
 shource _print_stack()

@@ -20,6 +20,7 @@ function parse_args()
     done
 
     local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )
+    boolean_regex="^--(no-)?(${boolean_regex})(=(true|false))?$"
 
     local populate_args=false
     declare -g -a _args=()
@@ -40,8 +41,22 @@ function parse_args()
         key=""
         value=true
         # Boolean flags
-        if [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ ^--(${boolean_regex})$ ]]; then
-            key="${BASH_REMATCH[1]}"
+        if [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
+            key="${BASH_REMATCH[2]}"
+
+            if [[ ${BASH_REMATCH[4]} == "false" ]]; then
+                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
+                    value=true
+                else
+                    value=false
+                fi
+            else
+                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
+                    value=false
+                else
+                    value=true
+                fi
+            fi
         elif [[ $this_arg =~ ^--([^=]+)=(.*)$ ]]; then
             key="${BASH_REMATCH[1]}"
             value="${BASH_REMATCH[2]}"

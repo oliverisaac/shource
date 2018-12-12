@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4
+#!/usr/bin/env shource
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 ft=sh:
 
 set -e # Exit on any error. Use `COMMAND || true` to nullify
 set -E # Functions inherit error trap
@@ -54,13 +54,18 @@ function main()
     local source="$1"
     local create="$2"
     local overwrite="$3"
-    local no_print_tag="$4"
+    local print_tag="$4"
     local run="$5"
-    local no_print_shebang="$6"
-    local no_make_exec="$7"
+    local print_shebang="$6"
+    local make_exec="$7"
     shift 7
     local args=( "${@}" )
 
+    local run_default=false
+    if [[ $run == "default" ]]; then
+        run=true
+        run_default=true
+    fi
 
     local target_dir=$( dirname "$source" )
     target_dir=$( cd $target_dir && pwd -P )
@@ -91,10 +96,6 @@ function main()
     local temp_write=$(mktemp)
 
     local line_index=0
-    local print_tag=true
-    if $no_print_tag; then
-        print_tag=false
-    fi
 
     local print_this_line=true
     local func_path
@@ -105,7 +106,7 @@ function main()
         local regex='^shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
             if func_path=$( shource_to_filepath "$line" ); then
-                "$self" "$func_path" --no-print-tag --no-print-shebang --no-make-exec
+                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path" 
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
@@ -114,8 +115,12 @@ function main()
         fi
 
         if [[ $line_index == 1 ]] && [[ $line =~ ^#! ]]; then
-            if $no_print_shebang; then
+            if ! $print_shebang; then
                 print_this_line=false
+            fi
+
+            if [[ $line =~ \#!.*shource ]]; then
+                line="#!/usr/bin/env bash"
             fi
         fi
 
@@ -128,21 +133,33 @@ function main()
         echo "$tag" | sed -i"" -e '1 r /dev/stdin' "$temp_write"
     fi
 
-    if ! $run; then
-        cat "$temp_write" > "$write_target"
+    if $create || ! $run; then
+        local write_to_file=false
+        # If we are writing to stdout or if the file will actually make a change, then write the file
+        if [[ $write_target == $default_write_target ]]; then
+            write_to_file=true
+        elif ! ( diff -q "$write_target" "$temp_write" 2>/dev/null ); then
+            write_to_file=true
+        fi
 
-        if ! $no_make_exec && [[ $write_target != $default_write_target ]]; then
+        if $write_to_file; then
+            cat "$temp_write" > "$write_target"
+        fi
+
+        if $make_exec && [[ $write_target != $default_write_target ]]; then
             chmod +x "$write_target"
         fi
     fi
 
-    if $run; then
+    # IF the user explicitly asked to run then run. If they didn't ask to create, then run
+    local return_value=0
+    if ( ! $run_default && $run ) || ( ! $create && $run ); then
         chmod +x "$temp_write"
-        /usr/bin/env bash "$temp_write" "${args[@]}"
+        /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
     fi
 
     rm "$temp_write"
-    return 0
+    return $return_value
 }
 
 
@@ -154,12 +171,25 @@ function _display_help()
 EOF
 }
 
+all_args=( "${@}" )
+shource_args=()
+command_args=()
+
+for x in "${all_args[@]}"; do
+    shource_args+=( "$x" )
+    shift
+    if [[ -f "$x" ]]; then
+        break
+    fi
+done
+command_args=( "${@}" )
+
 # Check if any of the args are a cry for help
-if echo "${@}" | grep -q -wiEe "-h|--help|help"; then
+if echo "${shource_args[@]}" | grep -q -wiEe "-h|--help|help"; then
     _display_help
     exit 4
 fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-parse_args run no_make_exec no_print_tag no_print_shebang create force -- "${@}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag:-false}" "${run:-false}" "${no_print_shebang:-false}" "${no_make_exec:-false}" "${_args[@]:1}"; exit $?
+parse_args run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${command_args[@]}"; exit $?
