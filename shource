@@ -128,7 +128,7 @@ function main()
         local regex='^shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
             if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
+                /usr/bin/env bash -x "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
