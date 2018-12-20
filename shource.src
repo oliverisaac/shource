@@ -19,8 +19,8 @@ readonly my_path=$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
 {
-    local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
     local regex="^shource +((.*):)?([a-zA-Z0-9_]+)\\(\\) *$"
+    local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
 
     if ! [[ $1 =~ $regex ]]; then
         return 1
@@ -127,7 +127,7 @@ function main()
         local regex='^shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
             if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path" 
+                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
@@ -146,9 +146,9 @@ function main()
         fi
 
         if $print_this_line; then
-            printf "%s\n" "$line"
+            printf "%s\n" "$line" >> "$temp_write"
         fi
-    done < <( cat "$source_file" )  > "$temp_write"
+    done < <( cat "$source_file" ) 
 
     if $print_tag; then
         echo "$tag" | sed -i"" -e '1 r /dev/stdin' "$temp_write"
