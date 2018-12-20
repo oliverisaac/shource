@@ -14,6 +14,185 @@ readonly tag="# source code generated using shource: https://github.com/oliveris
 readonly self_dir="$( dirname "$( readlink -f "$0" )" )"
 readonly self="$self_dir/$( basename "$( readlink -f "$0" )" )"
 
+readonly git_dir=~/.shource
+readonly my_path=$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )
+
+# This function receives a shource "path" and turns it into a file that can be read
+function shource_to_filepath()
+{
+    local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
+    local regex="^shource +((.*):)?([a-zA-Z0-9_]+)\\(\\) *$"
+
+    if ! [[ $1 =~ $regex ]]; then
+        return 1
+    fi
+
+    local src_dir="${BASH_REMATCH[2]}"
+    local src_file="${BASH_REMATCH[3]}"
+    local type='git'
+    local git_url=""
+    local ret_code=0
+
+    if [[ $src_dir == "" ]]; then
+        type='local'
+    elif [[ $src_dir =~ $github_regex ]]; then
+        git_url="https://github.com/$src_dir"
+    else
+        git_url="$src_dir"
+    fi
+
+    if [[ $type == "local" ]]; then
+        src_dir="$my_path"
+    fi
+
+    if [[ $type == "git" ]]; then
+        local right_hand=$( echo "$git_url" | awk -F':' '{print $NF}' )
+        local repo_owner=$( echo "$right_hand" | awk -F'/' '{print $(NF-1)}' )
+        local repo_name=$( echo "$right_hand" | awk -F'/' '{print $(NF)}' )
+
+        local src_dir="$git_dir/$repo_owner/$repo_name"
+        if [[ -d "$src_dir" ]]; then
+            ( cd "$src_dir" && git pull || git clone "$git_url" . || true ) &>/dev/null
+            ret_code=0
+        else
+            mkdir -p "$src_dir"
+            ( cd "$src_dir" && git clone "$git_url" ) &>/dev/null
+            ret_code=$?
+        fi
+    fi
+
+    local filepath="$src_dir/shources/$src_file"
+    echo "$filepath"
+
+    if ! [[ -e $filepath ]]; then
+        return 1
+    fi
+
+    return $ret_code
+}
+
+function main()
+{
+    local source="$1"
+    local create="$2"
+    local overwrite="$3"
+    local print_tag="$4"
+    local run="$5"
+    local print_shebang="$6"
+    local make_exec="$7"
+    shift 7
+    local args=( "${@}" )
+
+    local run_default=false
+    if [[ $run == "default" ]]; then
+        run=true
+        run_default=true
+    fi
+
+    local target_dir=$( dirname "$source" )
+    target_dir=$( cd $target_dir && pwd -P )
+
+    local default_write_target="/dev/stdout"
+    local write_target="$default_write_target"
+
+    local source_file="$target_dir/$( basename "$source" )"
+    if $create; then
+        local regex='[.]src$'
+        if ! [[ $source_file =~ $regex ]]; then
+            log 0 "Your filename must end with .src to trigger creation"
+            exit 2
+        fi
+
+        target_file="${source_file%.src}"
+        if [[ -e "$target_file" ]] && ! $overwrite; then
+            local second_line=$( cat "$target_file" | head -n2 | tail -n1 )
+            if [[ $second_line != "$tag" ]]; then
+                log 0 "You will accidently overwrite $target_file if you continue! Use --force to allow overwrites"
+                exit 4
+            fi
+        fi
+
+        write_target="$target_file"
+    fi
+
+    local temp_write=$(mktemp)
+
+    local line_index=0
+
+    local print_this_line=true
+    local func_path
+    while IFS='' read -r line; do
+        print_this_line=true
+        line_index=$(( line_index + 1 ))
+
+        local regex='^shource .+\(\) *$'
+        if [[ $line =~ $regex ]]; then
+            if func_path=$( shource_to_filepath "$line" ); then
+                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path" 
+                continue
+            else
+                log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
+                exit 1
+            fi
+        fi
+
+        if [[ $line_index == 1 ]] && [[ $line =~ ^#! ]]; then
+            if ! $print_shebang; then
+                print_this_line=false
+            fi
+
+            if [[ $line =~ \#!.*shource ]]; then
+                line="#!/usr/bin/env bash"
+            fi
+        fi
+
+        if $print_this_line; then
+            printf "%s\n" "$line"
+        fi
+    done < <( cat "$source_file" )  > "$temp_write"
+
+    if $print_tag; then
+        echo "$tag" | sed -i"" -e '1 r /dev/stdin' "$temp_write"
+    fi
+
+    if $create || ! $run; then
+        local write_to_file=false
+        # If we are writing to stdout or if the file will actually make a change, then write the file
+        if [[ $write_target == $default_write_target ]]; then
+            write_to_file=true
+        elif ! ( diff -q "$write_target" "$temp_write" 2>/dev/null ); then
+            write_to_file=true
+        fi
+
+        if $write_to_file; then
+            cat "$temp_write" > "$write_target"
+        fi
+
+        if $make_exec && [[ $write_target != $default_write_target ]]; then
+            chmod +x "$write_target"
+        fi
+    fi
+
+    # IF the user explicitly asked to run then run. If they didn't ask to create, then run
+    local return_value=0
+    if ( ! $run_default && $run ) || ( ! $create && $run ); then
+        chmod +x "$temp_write"
+        /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
+    fi
+
+    rm "$temp_write"
+    return $return_value
+}
+
+
+function _display_help()
+{
+    cat - > >( sed -r -e "s/^ {,8}//" ) <<EOF
+        Sample help file
+        TADA!
+EOF
+}
+
 
 # Loops through passed in args and sets variables for each of them
 # Call like this: _parse_args help refresh debug -- "${@}"
@@ -211,160 +390,6 @@ function _print_stack()
 trap '_on_term' HUP TERM INT
 trap '_on_error $LINENO ${PIPESTATUS[@]}' ERR
 trap '_on_exit' EXIT
-
-# This function receives a shource "path" and turns it into a file that can be read
-function shource_to_filepath()
-{
-    local shource="$1"
-    local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
-    local regex="^shource +((.*):)?([a-zA-Z0-9_]+)\\(\\) *$"
-    local src_dir=""
-    local src_file=""
-
-    if [[ $shource =~ $regex ]]; then
-        src_dir="${BASH_REMATCH[2]}"
-        src_file="${BASH_REMATCH[3]}"
-
-        local type='url'
-        if [[ $src_dir == "" ]]; then
-            type='local'
-        elif [[ $src_dir =~ $github_regex ]]; then
-            type='github'
-        fi
-
-        if [[ $type == 'local' ]]; then
-            echo "$self_dir/shources/$src_file"
-        else
-            return 1
-        fi
-    else
-        return 1
-    fi
-
-    return 0
-}
-
-function main()
-{
-    local source="$1"
-    local create="$2"
-    local overwrite="$3"
-    local print_tag="$4"
-    local run="$5"
-    local print_shebang="$6"
-    local make_exec="$7"
-    shift 7
-    local args=( "${@}" )
-
-    local run_default=false
-    if [[ $run == "default" ]]; then
-        run=true
-        run_default=true
-    fi
-
-    local target_dir=$( dirname "$source" )
-    target_dir=$( cd $target_dir && pwd -P )
-
-    local default_write_target="/dev/stdout"
-    local write_target="$default_write_target"
-
-    local source_file="$target_dir/$( basename "$source" )"
-    if $create; then
-        local regex='[.]src$'
-        if ! [[ $source_file =~ $regex ]]; then
-            log 0 "Your filename must end with .src to trigger creation"
-            exit 2
-        fi
-
-        target_file="${source_file%.src}"
-        if [[ -e "$target_file" ]] && ! $overwrite; then
-            local second_line=$( cat "$target_file" | head -n2 | tail -n1 )
-            if [[ $second_line != "$tag" ]]; then
-                log 0 "You will accidently overwrite $target_file if you continue! Use --force to allow overwrites"
-                exit 4
-            fi
-        fi
-
-        write_target="$target_file"
-    fi
-
-    local temp_write=$(mktemp)
-
-    local line_index=0
-
-    local print_this_line=true
-    local func_path
-    while IFS='' read -r line; do
-        print_this_line=true
-        line_index=$(( line_index + 1 ))
-
-        local regex='^shource .+\(\) *$'
-        if [[ $line =~ $regex ]]; then
-            if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path" 
-                continue
-            else
-                log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
-                exit 1
-            fi
-        fi
-
-        if [[ $line_index == 1 ]] && [[ $line =~ ^#! ]]; then
-            if ! $print_shebang; then
-                print_this_line=false
-            fi
-
-            if [[ $line =~ \#!.*shource ]]; then
-                line="#!/usr/bin/env bash"
-            fi
-        fi
-
-        if $print_this_line; then
-            printf "%s\n" "$line"
-        fi
-    done < <( cat "$source_file" )  > "$temp_write"
-
-    if $print_tag; then
-        echo "$tag" | sed -i"" -e '1 r /dev/stdin' "$temp_write"
-    fi
-
-    if $create || ! $run; then
-        local write_to_file=false
-        # If we are writing to stdout or if the file will actually make a change, then write the file
-        if [[ $write_target == $default_write_target ]]; then
-            write_to_file=true
-        elif ! ( diff -q "$write_target" "$temp_write" 2>/dev/null ); then
-            write_to_file=true
-        fi
-
-        if $write_to_file; then
-            cat "$temp_write" > "$write_target"
-        fi
-
-        if $make_exec && [[ $write_target != $default_write_target ]]; then
-            chmod +x "$write_target"
-        fi
-    fi
-
-    # IF the user explicitly asked to run then run. If they didn't ask to create, then run
-    local return_value=0
-    if ( ! $run_default && $run ) || ( ! $create && $run ); then
-        chmod +x "$temp_write"
-        /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
-    fi
-
-    rm "$temp_write"
-    return $return_value
-}
-
-
-function _display_help()
-{
-    cat - > >( sed -r -e "s/^ {,8}//" ) <<EOF
-        Sample help file
-        TADA!
-EOF
-}
 
 all_args=( "${@}" )
 shource_args=()

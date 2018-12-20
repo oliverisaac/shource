@@ -13,40 +13,61 @@ readonly tag="# source code generated using shource: https://github.com/oliveris
 readonly self_dir="$( dirname "$( readlink -f "$0" )" )"
 readonly self="$self_dir/$( basename "$( readlink -f "$0" )" )"
 
-shource parse_args()
-shource log()
-shource traps()
+readonly git_dir=~/.shource
+readonly my_path=$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )
 
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
 {
-    local shource="$1"
     local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
     local regex="^shource +((.*):)?([a-zA-Z0-9_]+)\\(\\) *$"
-    local src_dir=""
-    local src_file=""
 
-    if [[ $shource =~ $regex ]]; then
-        src_dir="${BASH_REMATCH[2]}"
-        src_file="${BASH_REMATCH[3]}"
-
-        local type='url'
-        if [[ $src_dir == "" ]]; then
-            type='local'
-        elif [[ $src_dir =~ $github_regex ]]; then
-            type='github'
-        fi
-
-        if [[ $type == 'local' ]]; then
-            echo "$self_dir/shources/$src_file"
-        else
-            return 1
-        fi
-    else
+    if ! [[ $1 =~ $regex ]]; then
         return 1
     fi
 
-    return 0
+    local src_dir="${BASH_REMATCH[2]}"
+    local src_file="${BASH_REMATCH[3]}"
+    local type='git'
+    local git_url=""
+    local ret_code=0
+
+    if [[ $src_dir == "" ]]; then
+        type='local'
+    elif [[ $src_dir =~ $github_regex ]]; then
+        git_url="https://github.com/$src_dir"
+    else
+        git_url="$src_dir"
+    fi
+
+    if [[ $type == "local" ]]; then
+        src_dir="$my_path"
+    fi
+
+    if [[ $type == "git" ]]; then
+        local right_hand=$( echo "$git_url" | awk -F':' '{print $NF}' )
+        local repo_owner=$( echo "$right_hand" | awk -F'/' '{print $(NF-1)}' )
+        local repo_name=$( echo "$right_hand" | awk -F'/' '{print $(NF)}' )
+
+        local src_dir="$git_dir/$repo_owner/$repo_name"
+        if [[ -d "$src_dir" ]]; then
+            ( cd "$src_dir" && git pull || git clone "$git_url" . || true ) &>/dev/null
+            ret_code=0
+        else
+            mkdir -p "$src_dir"
+            ( cd "$src_dir" && git clone "$git_url" ) &>/dev/null
+            ret_code=$?
+        fi
+    fi
+
+    local filepath="$src_dir/shources/$src_file"
+    echo "$filepath"
+
+    if ! [[ -e $filepath ]]; then
+        return 1
+    fi
+
+    return $ret_code
 }
 
 function main()
@@ -170,6 +191,10 @@ function _display_help()
         TADA!
 EOF
 }
+
+shource parse_args()
+shource log()
+shource traps()
 
 all_args=( "${@}" )
 shource_args=()
