@@ -2,6 +2,8 @@
 
 function ensure_gpg_key()
 {(
+    shource log()
+
     # Fetch the gpg key. If that fails, and we have it, then just move on
     local key="$1"
     local keyserver="${2:-}"

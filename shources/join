@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 function join()
-{
+{(
     local joiner="$1"
     shift
     local args=( "${@}" )
@@ -17,4 +17,4 @@ function join()
         fi
         printf "%s" "$x"
     done
-}
+)}

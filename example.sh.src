@@ -14,5 +14,9 @@ function run_test()
 }
 
 shource log()
+shource parse_args()
 
-run_test
+parse_args hello -- "${@}"
+
+echo "$name" "$hello"
+printf -- "- %s\n" "${_args[@]}"

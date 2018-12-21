@@ -21,7 +21,7 @@ export SHOURCE_PATH
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
 {
-    local regex="^shource +((.*):)?([a-zA-Z0-9_]+)\\(\\) *$"
+    local regex='^ *shource +((.*):)?([a-zA-Z0-9_]+)\(\) *$'
     local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
 
     if ! [[ $1 =~ $regex ]]; then
@@ -81,7 +81,8 @@ function main()
     local run="$5"
     local print_shebang="$6"
     local make_exec="$7"
-    shift 7
+    local indent="$8"
+    shift 8
     local args=( "${@}" )
 
     local run_default=false
@@ -127,10 +128,11 @@ function main()
         print_this_line=true
         line_index=$(( line_index + 1 ))
 
-        local regex='^shource .+\(\) *$'
+        local regex='^( *)shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
+            local line_indent="${BASH_REMATCH[1]}"
             if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
+                /usr/bin/env bash "$self" --no-print-tag --indent="$indent${line_indent}" --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_path but it does not exist!"
@@ -221,4 +223,4 @@ fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
 parse_args run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${command_args[@]}"; exit $?
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${indent:-}" "${command_args[@]}"; exit $?

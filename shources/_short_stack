@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 function _short_stack()
-{
+{(
     local STACK=""
     local i 
     local stack_size="${#FUNCNAME[@]}"
@@ -22,4 +22,4 @@ function _short_stack()
     local bash_source="${BASH_SOURCE[0]}"
     bash_source="${BASH_SOURCE##*/}"
     echo "$bash_source.$response"
-}
+)}

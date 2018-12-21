@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 function _print_stack()
-{
+{(
    local STACK=""
    local i 
    local stack_size="${#FUNCNAME[@]}"
@@ -15,5 +15,5 @@ function _print_stack()
 
       echo "   at: $func $src:$linen"
    done
-}
+)}
 

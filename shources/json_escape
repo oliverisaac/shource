@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 
 function json_escape()
-{
+{(
     local str="$1"
-    str=${str//\\/\\\\} # \
-    str=${str//\//\\\/} # /
-    str=${str//\"/\\\"} # "
-    str=${str//   /\\t} # \t (tab)
-    str=${str//
-/\\\n} # \n (newline)
-    str=${str//^M/\\\r} # \r (carriage return)
-    str=${str//^L/\\\f} # \f (form feed)
-    str=${str//^H/\\\b} # \b (backspace)
+    str="${str//\\/\\\\}" # \
+    str="${str//\//\\\/}" # /
+    str="${str//\"/\\\"}" # "
+    str="${str//$'\t'/\\t}" # \t (tab)
+    str="${str//$'\n'/\\\n}" # \n (newline)
+    str="${str//^M/\\\r}" # \r (carriage return)
+    str="${str//^L/\\\f}" # \f (form feed)
+    str="${str//^H/\\\b}" # \b (backspace)
     printf "%s" "$str"
-}
+)}
 
