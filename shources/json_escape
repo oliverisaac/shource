@@ -2,6 +2,7 @@
 
 function json_escape()
 {(
+    set +x
     local str="$1"
     str="${str//\\/\\\\}" # \
     str="${str//\//\\\/}" # /

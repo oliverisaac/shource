@@ -4,6 +4,12 @@
 # Call like this: _parse_args help refresh debug -- "${@}"
 function parse_args()
 {
+    local reset_x=false
+
+    if [[ $- =~ x ]]; then
+        reset_x=true
+    fi
+    set +x
     shource log()
 
     function parse_these()
@@ -91,4 +97,6 @@ function parse_args()
             declare -g "$key"="$value"
         fi
     done < <( parse_these "${@}" ) 
+
+    $reset_x && set -x
 }

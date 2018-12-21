@@ -2,6 +2,7 @@
 
 function join()
 {(
+    set +x
     local joiner="$1"
     shift
     local args=( "${@}" )

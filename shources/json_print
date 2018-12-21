@@ -2,8 +2,9 @@
 
 function json_print()
 {(
+    set +x
 
-shource json_escape()
+    shource json_escape()
 
     local args=( "${@}" )
     local num_args=${#args[@]}

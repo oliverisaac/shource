@@ -4,6 +4,7 @@
 export SCRIPT_PID="$$"
 function bail()
 {(
+    set +x
     local message="${@}"
 
     echo "ERROR: $message" >&2

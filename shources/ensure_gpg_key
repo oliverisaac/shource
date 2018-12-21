@@ -2,6 +2,7 @@
 
 function ensure_gpg_key()
 {(
+    set +x
     shource log()
 
     # Fetch the gpg key. If that fails, and we have it, then just move on
@@ -10,10 +11,10 @@ function ensure_gpg_key()
     local wait_time="${3:-10}"
     local key_fetch_result=""
 
-    until key_fetch_result=$( { gpg "${keyserver:+--keyserver}" "$keyserver" --no-tty --recv-key "$key" || gpg --no-tty --list-key "$key"; } 2>&1 ); do
-        log 0 "$key_fetch_result"
-        log 0 "Waiting for GPG key${keyserver:+ from $keyserver}: $key"
+    until key_fetch_result=$( { gpg ${keyserver:+--keyserver} $keyserver --no-tty --recv-key "$key" || gpg --no-tty --list-key "$key"; } 2>&1 ); do
+        log 2 "$key_fetch_result"
+        log 2 "Waiting for GPG key${keyserver:+ from $keyserver}: $key"
         sleep $wait_time
     done
-    log 0 "$key_fetch_result"
+    log 1 "$key_fetch_result"
 )}

@@ -2,6 +2,7 @@
 
 function _short_stack()
 {(
+    set +x
     local STACK=""
     local i 
     local stack_size="${#FUNCNAME[@]}"

@@ -2,6 +2,7 @@
 
 function freq_to_seconds()
 {(
+    set +x
     local freq="$1"
     local time=0
 

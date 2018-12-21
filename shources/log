@@ -2,6 +2,8 @@
 
 function log()
 {(
+    set +x
+
     shource json_print()
     shource _short_stack()
 
