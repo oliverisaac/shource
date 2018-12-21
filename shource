@@ -133,7 +133,7 @@ function main()
         if [[ $line =~ $regex ]]; then
             local line_indent="${BASH_REMATCH[1]}"
             if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --indent="$line_indent" --no-make-exec --no-run "$func_path"  >> "$temp_write"
+                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --indent="${indent}$line_indent" --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_path but it does not exist!"
