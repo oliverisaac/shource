@@ -39,11 +39,6 @@ function parse_args()
         for (( ; i<num_args; i++ )); do
             this_arg="${input_args[$i]}"
             log 4 "$i : $this_arg"
-            if $populate_args; then
-                log 4 "Appending $this_arg to _args[]"
-                _args+=( "$this_arg" )
-                continue
-            fi
 
             if [[ $this_arg == "--" ]]; then
                 populate_args=true
@@ -52,8 +47,12 @@ function parse_args()
 
             key=""
             value=true
+
             # Boolean flags
-            if [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
+            if $populate_args; then
+                key="_args"
+                value="$this_arg"
+            elif [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
                 key="${BASH_REMATCH[2]}"
 
                 if [[ ${BASH_REMATCH[4]} == "false" ]]; then
@@ -98,5 +97,6 @@ function parse_args()
         fi
     done < <( parse_these "${@}" ) 
 
-    $reset_x && set -x
+    $reset_x && set -x || true
+    return 0
 }
