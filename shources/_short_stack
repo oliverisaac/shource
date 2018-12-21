@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+function _short_stack()
+{
+    local STACK=""
+    local i 
+    local stack_size="${#FUNCNAME[@]}"
+    local response=""
+    local line_no
+
+    # to avoid noise we start with 1 to skip the get_stack function
+    for (( i=2; i<=( stack_size - 1 ); i++ )); do
+        local func="${FUNCNAME[$i]}"
+        [ x$func = x ] && func=MAIN
+        local linen="${BASH_LINENO[$(( i - 1 ))]}"
+        local src="${BASH_SOURCE[$i]}"
+        [ x"$src" = x ] && src=non_file_source
+
+        response="$func:${linen}${response:+.}${response:-}"
+
+    done
+    echo "$response"
+}
