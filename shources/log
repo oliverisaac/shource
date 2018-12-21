@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
 function log()
-{
+{(
+shource json_print()
+shource _short_stack()
+
     local level="$1"
     shift
     local args=( "${@}" )
@@ -17,8 +20,6 @@ function log()
             json_print time:s "$time" level:d "$level" msg:s "$message" source:s "$( _short_stack )" >&2
         fi
     fi
-}
+)}
 
-shource json_print()
-shource _short_stack()
 
