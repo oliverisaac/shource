@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
-shource oliverisaac/shource-scripts:hello_world()
 
-hello_world
+export JSON_LOG_FORMAT=true
+
+function print_line()
+{
+    log 0 "This is at est"
+}
+
+function run_test()
+{
+    print_line
+}
+
+shource log()
+
+run_test

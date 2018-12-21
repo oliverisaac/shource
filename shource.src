@@ -14,7 +14,9 @@ readonly self_dir="$( dirname "$( readlink -f "$0" )" )"
 readonly self="$self_dir/$( basename "$( readlink -f "$0" )" )"
 
 readonly git_dir=~/.shource
-readonly my_path=$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )
+readonly my_path=$( dirname "$( readlink -f "$0" )" )
+readonly SHOURCE_PATH="${SHOURCE_PATH:-$my_path}"
+export SHOURCE_PATH
 
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
@@ -41,7 +43,7 @@ function shource_to_filepath()
     fi
 
     if [[ $type == "local" ]]; then
-        src_dir="$my_path"
+        src_dir="$SHOURCE_PATH"
     fi
 
     if [[ $type == "git" ]]; then
@@ -114,7 +116,8 @@ function main()
         write_target="$target_file"
     fi
 
-    local temp_write=$(mktemp)
+    local temp_folder=$( mktemp -d )
+    local temp_write="$temp_folder/$( basename "${source_file%.src}" )"
 
     local line_index=0
 
@@ -130,7 +133,8 @@ function main()
                 /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
-                log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
+                log 0 "ERROR: You tried to shource $func_path but it does not exist!"
+                log 0 "$source_file:$line_index : $line"
                 exit 1
             fi
         fi
@@ -179,7 +183,7 @@ function main()
         /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
     fi
 
-    rm "$temp_write"
+    rm -r "$temp_folder"
     return $return_value
 }
 

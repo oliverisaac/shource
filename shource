@@ -15,7 +15,9 @@ readonly self_dir="$( dirname "$( readlink -f "$0" )" )"
 readonly self="$self_dir/$( basename "$( readlink -f "$0" )" )"
 
 readonly git_dir=~/.shource
-readonly my_path=$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )
+readonly my_path=$( dirname "$( readlink -f "$0" )" )
+readonly SHOURCE_PATH="${SHOURCE_PATH:-$my_path}"
+export SHOURCE_PATH
 
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
@@ -42,7 +44,7 @@ function shource_to_filepath()
     fi
 
     if [[ $type == "local" ]]; then
-        src_dir="$my_path"
+        src_dir="$SHOURCE_PATH"
     fi
 
     if [[ $type == "git" ]]; then
@@ -115,7 +117,8 @@ function main()
         write_target="$target_file"
     fi
 
-    local temp_write=$(mktemp)
+    local temp_folder=$( mktemp -d )
+    local temp_write="$temp_folder/$( basename "${source_file%.src}" )"
 
     local line_index=0
 
@@ -128,10 +131,11 @@ function main()
         local regex='^shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
             if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash -x "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
+                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
-                log 0 "ERROR: You tried to shource $func_name but it does not exist in $self_dir!"
+                log 0 "ERROR: You tried to shource $func_path but it does not exist!"
+                log 0 "$source_file:$line_index : $line"
                 exit 1
             fi
         fi
@@ -180,7 +184,7 @@ function main()
         /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
     fi
 
-    rm "$temp_write"
+    rm -r "$temp_folder"
     return $return_value
 }
 
@@ -269,6 +273,25 @@ function parse_args()
     done
 }
 
+function log()
+{
+    local level="$1"
+    shift
+    local args=( "${@}" )
+    if [[ $level -le ${LOG_LEVEL:-0} ]]; then
+        local time=$( date "+%Y-%m-%d %H:%M:%S.%3N" )
+        local message="${@}"
+
+        if [[ ${JSON_LOG_FORMAT:-false} == "false" ]]; then
+            echo "$time [log $level]: $message" >&2
+        else
+            time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
+            # We subtract one line number because shource adds a line at the beginning
+            json_print time:s "$time" level:d "$level" msg:s "$message" source:s "$( _short_stack )" >&2
+        fi
+    fi
+}
+
 
 
 function json_escape()
@@ -320,23 +343,28 @@ function json_print()
 }
 
 
-function log()
+function _short_stack()
 {
-    local level="$1"
-    shift
-    local args=( "${@}" )
-    if [[ $level -le ${LOG_LEVEL:-0} ]]; then
-        local time=$( date "+%Y-%m-%d %H:%M:%S.%3N" )
-        local message="${@}"
+    local STACK=""
+    local i 
+    local stack_size="${#FUNCNAME[@]}"
+    local response=""
+    local line_no
 
-        if [[ ${JSON_LOG_FORMAT:-false} == "false" ]]; then
-            echo "$time [log $level]: $message" >&2
-        else
-            time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
-            json_print time:s "$time" level:d "$level" msg:s "$message" >&2
-        fi
-    fi
+    # to avoid noise we start with 1 to skip the get_stack function
+    for (( i=2; i<=( stack_size - 1 ); i++ )); do
+        local func="${FUNCNAME[$i]}"
+        [ x$func = x ] && func=MAIN
+        local linen="${BASH_LINENO[$(( i - 1 ))]}"
+        local src="${BASH_SOURCE[$i]}"
+        [ x"$src" = x ] && src=non_file_source
+
+        response="$func:${linen}${response:+.}${response:-}"
+
+    done
+    echo "$response"
 }
+
 
 # On exit is called on every exit
 function _on_exit()

@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-shource json_print()
-
 function log()
 {
     local level="$1"
@@ -15,7 +13,12 @@ function log()
             echo "$time [log $level]: $message" >&2
         else
             time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
-            json_print time:s "$time" level:d "$level" msg:s "$message" >&2
+            # We subtract one line number because shource adds a line at the beginning
+            json_print time:s "$time" level:d "$level" msg:s "$message" source:s "$( _short_stack )" >&2
         fi
     fi
 }
+
+shource json_print()
+shource _short_stack()
+
