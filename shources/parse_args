@@ -9,6 +9,8 @@ function parse_args()
     local num_args=${#input_args[@]}
     local this_arg i key value
 
+    log 2 "Called parse_args with these arguments: ${input_args[@]}"
+
     for (( i=0; i<num_args; i++ )); do
         this_arg="${input_args[$i]}"
         log 4 "$i : $this_arg"
@@ -67,6 +69,7 @@ function parse_args()
         fi
         key="${key//-/_}"
         if [[ $key == "" ]]; then
+            log 4 "Appending $this_arg to _args[]"
             _args+=( "$this_arg" )
         else
             log 4 "Setting $key to $value"
