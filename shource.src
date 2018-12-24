@@ -58,14 +58,12 @@ function shource_to_filepath()
         local repo_name=$( echo "$right_hand" | awk -F'/' '{print $(NF)}' )
 
         local src_dir="$git_dir/$repo_owner/$repo_name"
-        if [[ -d "$src_dir" ]]; then
-            ( cd "$src_dir" && git pull || git clone "$git_url" . || true ) &>/dev/null
-            ret_code=0
-        else
+        if ! [[ -d "$src_dir" ]]; then
             mkdir -p "$src_dir"
-            ( cd "$src_dir" && git clone "$git_url" ) &>/dev/null
-            ret_code=$?
         fi
+
+        ( cd "$src_dir" && git pull || git clone "$git_url" . || true ) &>/dev/null
+
         filepath="${src_dir}/shources/$src_file"
     fi
 

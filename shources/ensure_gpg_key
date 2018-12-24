@@ -1,9 +1,9 @@
 #!/bin/bash
 
+shource log()
 function ensure_gpg_key()
 {(
     set +x
-    shource log()
 
     # Fetch the gpg key. If that fails, and we have it, then just move on
     local key="$1"

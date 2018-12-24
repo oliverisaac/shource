@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
+shource json_print()
+shource _short_stack()
 function log()
 {(
     set +x
 
-    shource json_print()
-    shource _short_stack()
 
     local level="$1"
     shift

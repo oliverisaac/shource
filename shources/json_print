@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
+shource json_escape()
 function json_print()
 {(
     set +x
 
-    shource json_escape()
 
     local args=( "${@}" )
     local num_args=${#args[@]}
