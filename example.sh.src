@@ -1,22 +1,5 @@
 #!/usr/bin/env bash
 
+shource oliverisaac/shource-scripts:hello_world()
 
-export JSON_LOG_FORMAT=true
-
-function print_line()
-{
-    log 0 "This is at est"
-}
-
-function run_test()
-{
-    print_line
-}
-
-shource log()
-shource parse_args()
-
-parse_args hello -- "${@}"
-
-echo "$name" "$hello"
-printf -- "- %s\n" "${_args[@]}"
+hello_world

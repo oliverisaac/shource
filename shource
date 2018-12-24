@@ -13,19 +13,20 @@ LOG_LEVEL=0
 readonly tag="# source code generated using shource: https://github.com/oliverisaac/shource"
 readonly self_dir="$( dirname "$( readlink -f "$0" )" )"
 readonly self="$self_dir/$( basename "$( readlink -f "$0" )" )"
-
 readonly git_dir=~/.shource
-readonly my_path=$( dirname "$( readlink -f "$0" )" )
-readonly SHOURCE_PATH="${SHOURCE_PATH:-$my_path}"
-export SHOURCE_PATH
+
+export orig_shource_dir="${orig_shource_dir:-$self_dir}"
 
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
 {
-    local regex="^ *shource +((.*):)?([a-zA-Z0-9_]+)\\(\\) *$"
+    local line="$1"
+    local shource_dir="$2"
+
+    local regex='^ *shource +((.*):)?([a-zA-Z0-9_]+)\(\) *$'
     local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
 
-    if ! [[ $1 =~ $regex ]]; then
+    if ! [[ $line =~ $regex ]]; then
         return 1
     fi
 
@@ -34,6 +35,7 @@ function shource_to_filepath()
     local type='git'
     local git_url=""
     local ret_code=0
+    local filepath
 
     if [[ $src_dir == "" ]]; then
         type='local'
@@ -44,7 +46,11 @@ function shource_to_filepath()
     fi
 
     if [[ $type == "local" ]]; then
-        src_dir="$SHOURCE_PATH"
+        src_dir="$shource_dir"
+        filepath="$src_dir/shources/$src_file"
+        if ! [[ -e "$filepath" ]]; then
+            filepath="${orig_shource_dir}/shources/$src_file"
+        fi
     fi
 
     if [[ $type == "git" ]]; then
@@ -61,9 +67,10 @@ function shource_to_filepath()
             ( cd "$src_dir" && git clone "$git_url" ) &>/dev/null
             ret_code=$?
         fi
+        filepath="${src_dir}/shources/$src_file"
     fi
 
-    local filepath="$src_dir/shources/$src_file"
+    filepath=$( sanitize_shource_folder "$filepath" )
     echo "$filepath"
 
     if ! [[ -e $filepath ]]; then
@@ -71,6 +78,12 @@ function shource_to_filepath()
     fi
 
     return $ret_code
+}
+
+function sanitize_shource_folder()
+{
+    local shource_folder="$1"
+    echo "$shource_folder" | sed -r 's/\/+/\//g' | sed -r 's/\/+$//;' | sed -r 's/shources$//' 
 }
 
 function main()
@@ -83,7 +96,10 @@ function main()
     local print_shebang="$6"
     local make_exec="$7"
     local indent="$8"
-    shift 8
+    local shource_folder=$( sanitize_shource_folder "$9" )
+    local write_dir="${10}"
+    local child="${11}"
+    shift 11
     local args=( "${@}" )
 
     local run_default=false
@@ -118,8 +134,9 @@ function main()
         write_target="$target_file"
     fi
 
-    local temp_folder=$( mktemp -d )
-    local temp_write="$temp_folder/$( basename "${source_file%.src}" )"
+    local temp_write="$write_dir/$( basename "${source_file%.src}" )"
+    local log_file="${write_dir}/.already_shourced"
+    touch "$log_file"
 
     local line_index=0
 
@@ -132,8 +149,14 @@ function main()
         local regex='^( *)shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
             local line_indent="${BASH_REMATCH[1]}"
-            if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash "$self" --no-print-tag --no-print-shebang --indent="${indent}$line_indent" --no-make-exec --no-run "$func_path"  >> "$temp_write"
+            if func_path=$( shource_to_filepath "$line" "$shource_folder" ); then
+                if grep -q -e "^${func_path}$" "$log_file" &>/dev/null; then
+                    # Already included the file
+                    continue
+                fi
+
+                echo "$func_path" >> "$log_file"
+                /usr/bin/env bash "$self" --child --write-dir="$write_dir" --shource-folder="$( dirname "$func_path" )" --no-print-tag --indent="$indent${line_indent}" --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_path but it does not exist!"
@@ -153,7 +176,7 @@ function main()
         fi
 
         if $print_this_line; then
-            printf "%s\n" "$indent$line" >> "$temp_write"
+            printf "%s\n" "$line" >> "$temp_write"
         fi
     done < <( cat "$source_file" ) 
 
@@ -186,7 +209,9 @@ function main()
         /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
     fi
 
-    rm -r "$temp_folder"
+    if ! $child; then
+        rm -r "$write_dir"
+    fi
     return $return_value
 }
 
@@ -204,117 +229,42 @@ EOF
 # Call like this: _parse_args help refresh debug -- "${@}"
 function parse_args()
 {
-    local boolean_flags=()
-    local input_args=( "${@}" )
-    local num_args=${#input_args[@]}
-    local this_arg i key value
+    local reset_x=false
 
-    for (( i=0; i<num_args; i++ )); do
-        this_arg="${input_args[$i]}"
-        log 4 "$i : $this_arg"
-        if [[ $this_arg == "--" ]]; then
-            i=$(( i + 1 ))
-            break
-        fi
-        boolean_flags+=( "$( echo "${this_arg}" | tr '_-' '.' | sed 's/^-*//' )" )
-    done
-
-    local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )
-    boolean_regex="^--(no-)?(${boolean_regex})(=(true|false))?$"
-
-    local populate_args=false
-    declare -g -a _args=()
-    for (( ; i<num_args; i++ )); do
-        this_arg="${input_args[$i]}"
-        log 4 "$i : $this_arg"
-        if $populate_args; then
-            log 4 "Appending $this_arg to _args[]"
-            _args+=( "$this_arg" )
-            continue
-        fi
-
-        if [[ $this_arg == "--" ]]; then
-            populate_args=true
-            continue
-        fi
-
-        key=""
-        value=true
-        # Boolean flags
-        if [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
-            key="${BASH_REMATCH[2]}"
-
-            if [[ ${BASH_REMATCH[4]} == "false" ]]; then
-                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
-                    value=true
-                else
-                    value=false
-                fi
-            else
-                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
-                    value=false
-                else
-                    value=true
-                fi
-            fi
-        elif [[ $this_arg =~ ^--([^=]+)=(.*)$ ]]; then
-            key="${BASH_REMATCH[1]}"
-            value="${BASH_REMATCH[2]}"
-        elif [[ $this_arg =~ ^--(.+)$ ]]; then
-            key="${BASH_REMATCH[1]}"
-            ((i++))
-            value="${input_args[$i]}"
-        fi
-        key="${key//-/_}"
-        if [[ $key == "" ]]; then
-            _args+=( "$this_arg" )
-        else
-            log 4 "Setting $key to $value"
-            declare -g "$key"="$value"
-        fi
-    done
-}
+    if [[ $- =~ x ]]; then
+        reset_x=true
+    fi
+    set +x
 
 function log()
-{
-    local level="$1"
-    shift
-    local args=( "${@}" )
-    if [[ $level -le ${LOG_LEVEL:-0} ]]; then
-        local time=$( date "+%Y-%m-%d %H:%M:%S.%3N" )
-        local message="${@}"
+{(
+    set +x
 
-        if [[ ${JSON_LOG_FORMAT:-false} == "false" ]]; then
-            echo "$time [log $level]: $message" >&2
-        else
-            time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
-            # We subtract one line number because shource adds a line at the beginning
-            json_print time:s "$time" level:d "$level" msg:s "$message" source:s "$( _short_stack )" >&2
-        fi
-    fi
-}
 
+function json_print()
+{(
+    set +x
 
 
 function json_escape()
-{
+{(
+    set +x
     local str="$1"
-    str=${str//\\/\\\\} # \
-    str=${str//\//\\\/} # /
-    str=${str//\"/\\\"} # "
-    str=${str//   /\\t} # \t (tab)
-    str=${str//
-/\\\n} # \n (newline)
-    str=${str//^M/\\\r} # \r (carriage return)
-    str=${str//^L/\\\f} # \f (form feed)
-    str=${str//^H/\\\b} # \b (backspace)
+    str="${str//\\/\\\\}" # \
+    str="${str//\//\\\/}" # /
+    str="${str//\"/\\\"}" # "
+    str="${str//$'\t'/\\t}" # \t (tab)
+    str="${str//$'\n'/\\\n}" # \n (newline)
+    str="${str//^M/\\\r}" # \r (carriage return)
+    str="${str//^L/\\\f}" # \f (form feed)
+    str="${str//^H/\\\b}" # \b (backspace)
     printf "%s" "$str"
-}
+)}
 
-function json_print()
-{
+
     local args=( "${@}" )
     local num_args=${#args[@]}
+    local i
 
     printf "%s" "{"
     for (( i=0; i<$num_args; i=i+2 )); do
@@ -342,11 +292,12 @@ function json_print()
     done
 
     printf "%s\n" "}"
-}
+)}
 
 
 function _short_stack()
-{
+{(
+    set +x
     local STACK=""
     local i 
     local stack_size="${#FUNCNAME[@]}"
@@ -356,17 +307,126 @@ function _short_stack()
     # to avoid noise we start with 1 to skip the get_stack function
     for (( i=2; i<=( stack_size - 1 ); i++ )); do
         local func="${FUNCNAME[$i]}"
-        [ x$func = x ] && func=MAIN
+        [[ "$func" == "" ]] && func=MAIN
         local linen="${BASH_LINENO[$(( i - 1 ))]}"
         local src="${BASH_SOURCE[$i]}"
-        [ x"$src" = x ] && src=non_file_source
+        [[ "$src" == "" ]] && src=non_file_source
 
         response="$func:${linen}${response:+.}${response:-}"
 
     done
-    echo "$response"
-}
+    local bash_source="${BASH_SOURCE[0]}"
+    bash_source="${BASH_SOURCE##*/}"
+    echo "$bash_source.$response"
+)}
 
+    local level="$1"
+    shift
+    local args=( "${@}" )
+    if [[ $level -le ${LOG_LEVEL:-0} ]]; then
+        local time=$( date "+%Y-%m-%d %H:%M:%S.%3N" )
+        local message="${@}"
+
+        if [[ ${JSON_LOG_FORMAT:-false} == "false" ]]; then
+            echo "$time [log $level]: $message" >&2
+        else
+            time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
+            # We subtract one line number because shource adds a line at the beginning
+            json_print time:s "$time" level:d "$level" msg:s "$message" source:s "$( _short_stack )" >&2
+        fi
+    fi
+)}
+
+
+
+    function parse_these()
+    {
+        local boolean_flags=()
+        local input_args=( "${@}" )
+        local num_args=${#input_args[@]}
+        local this_arg i key value
+
+        log 2 "Called parse_args with these arguments: ${input_args[@]}"
+
+        for (( i=0; i<num_args; i++ )); do
+            this_arg="${input_args[$i]}"
+            log 4 "$i : $this_arg"
+            if [[ $this_arg == "--" ]]; then
+                i=$(( i + 1 ))
+                break
+            fi
+            boolean_flags+=( "$( echo "${this_arg}" | tr '_-' '.' | sed 's/^-*//' )" )
+        done
+
+        local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )
+        boolean_regex="^--(no-)?(${boolean_regex})(=(true|false))?$"
+
+        local populate_args=false
+        declare -g -a _args=()
+        for (( ; i<num_args; i++ )); do
+            this_arg="${input_args[$i]}"
+            log 4 "$i : $this_arg"
+
+            if [[ $this_arg == "--" ]]; then
+                populate_args=true
+                continue
+            fi
+
+            key=""
+            value=true
+
+            # Boolean flags
+            if $populate_args; then
+                key="_args"
+                value="$this_arg"
+            elif [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
+                key="${BASH_REMATCH[2]}"
+
+                if [[ ${BASH_REMATCH[4]} == "false" ]]; then
+                    if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
+                        value=true
+                    else
+                        value=false
+                    fi
+                else
+                    if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
+                        value=false
+                    else
+                        value=true
+                    fi
+                fi
+            elif [[ $this_arg =~ ^--([^=]+)=(.*)$ ]]; then
+                key="${BASH_REMATCH[1]}"
+                value="${BASH_REMATCH[2]}"
+            elif [[ $this_arg =~ ^--(.+)$ ]]; then
+                key="${BASH_REMATCH[1]}"
+                ((i++))
+                value="${input_args[$i]}"
+            fi
+            key="${key//-/_}"
+            if [[ $key == "" ]]; then
+                key="_args"
+                value="$this_arg"
+            fi
+            printf "%s:%s\n" "$key" "$( printf "%s" "$value" | base64 -w0 )"
+        done
+    }
+
+    local key b64value
+    _args=()
+    while IFS=':' read key b64value; do
+        local value=$( echo "$b64value" | base64 --decode )
+
+        if [[ $key == "_args" ]]; then
+            _args+=( "${value}" )
+        else
+            declare -g "$key"="$value"
+        fi
+    done < <( parse_these "${@}" ) 
+
+    $reset_x && set -x || true
+    return 0
+}
 
 # On exit is called on every exit
 function _on_exit()
@@ -400,7 +460,8 @@ function _on_error()
 
 
 function _print_stack()
-{
+{(
+    set +x
    local STACK=""
    local i 
    local stack_size="${#FUNCNAME[@]}"
@@ -414,7 +475,7 @@ function _print_stack()
 
       echo "   at: $func $src:$linen"
    done
-}
+)}
 
 
 trap '_on_term' HUP TERM INT
@@ -441,5 +502,5 @@ if echo "${shource_args[@]}" | grep -q -wiEe "-h|--help|help"; then
 fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-parse_args run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${indent:-}" "${command_args[@]}"; exit $?
+parse_args child run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child:-false}" "${command_args[@]}"; exit $?

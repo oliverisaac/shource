@@ -12,19 +12,20 @@ LOG_LEVEL=0
 readonly tag="# source code generated using shource: https://github.com/oliverisaac/shource"
 readonly self_dir="$( dirname "$( readlink -f "$0" )" )"
 readonly self="$self_dir/$( basename "$( readlink -f "$0" )" )"
-
 readonly git_dir=~/.shource
-readonly my_path=$( dirname "$( readlink -f "$0" )" )
-readonly SHOURCE_PATH="${SHOURCE_PATH:-$my_path}"
-export SHOURCE_PATH
+
+export orig_shource_dir="${orig_shource_dir:-$self_dir}"
 
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
 {
+    local line="$1"
+    local shource_dir="$2"
+
     local regex='^ *shource +((.*):)?([a-zA-Z0-9_]+)\(\) *$'
     local github_regex='^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'
 
-    if ! [[ $1 =~ $regex ]]; then
+    if ! [[ $line =~ $regex ]]; then
         return 1
     fi
 
@@ -33,6 +34,7 @@ function shource_to_filepath()
     local type='git'
     local git_url=""
     local ret_code=0
+    local filepath
 
     if [[ $src_dir == "" ]]; then
         type='local'
@@ -43,7 +45,11 @@ function shource_to_filepath()
     fi
 
     if [[ $type == "local" ]]; then
-        src_dir="$SHOURCE_PATH"
+        src_dir="$shource_dir"
+        filepath="$src_dir/shources/$src_file"
+        if ! [[ -e "$filepath" ]]; then
+            filepath="${orig_shource_dir}/shources/$src_file"
+        fi
     fi
 
     if [[ $type == "git" ]]; then
@@ -60,9 +66,10 @@ function shource_to_filepath()
             ( cd "$src_dir" && git clone "$git_url" ) &>/dev/null
             ret_code=$?
         fi
+        filepath="${src_dir}/shources/$src_file"
     fi
 
-    local filepath="$src_dir/shources/$src_file"
+    filepath=$( sanitize_shource_folder "$filepath" )
     echo "$filepath"
 
     if ! [[ -e $filepath ]]; then
@@ -70,6 +77,12 @@ function shource_to_filepath()
     fi
 
     return $ret_code
+}
+
+function sanitize_shource_folder()
+{
+    local shource_folder="$1"
+    echo "$shource_folder" | sed -r 's/\/+/\//g' | sed -r 's/\/+$//;' | sed -r 's/shources$//' 
 }
 
 function main()
@@ -82,7 +95,10 @@ function main()
     local print_shebang="$6"
     local make_exec="$7"
     local indent="$8"
-    shift 8
+    local shource_folder=$( sanitize_shource_folder "$9" )
+    local write_dir="${10}"
+    local child="${11}"
+    shift 11
     local args=( "${@}" )
 
     local run_default=false
@@ -117,8 +133,9 @@ function main()
         write_target="$target_file"
     fi
 
-    local temp_folder=$( mktemp -d )
-    local temp_write="$temp_folder/$( basename "${source_file%.src}" )"
+    local temp_write="$write_dir/$( basename "${source_file%.src}" )"
+    local log_file="${write_dir}/.already_shourced"
+    touch "$log_file"
 
     local line_index=0
 
@@ -131,8 +148,14 @@ function main()
         local regex='^( *)shource .+\(\) *$'
         if [[ $line =~ $regex ]]; then
             local line_indent="${BASH_REMATCH[1]}"
-            if func_path=$( shource_to_filepath "$line" ); then
-                /usr/bin/env bash "$self" --no-print-tag --indent="$indent${line_indent}" --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
+            if func_path=$( shource_to_filepath "$line" "$shource_folder" ); then
+                if grep -q -e "^${func_path}$" "$log_file" &>/dev/null; then
+                    # Already included the file
+                    continue
+                fi
+
+                echo "$func_path" >> "$log_file"
+                /usr/bin/env bash "$self" --child --write-dir="$write_dir" --shource-folder="$( dirname "$func_path" )" --no-print-tag --indent="$indent${line_indent}" --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
                 log 0 "ERROR: You tried to shource $func_path but it does not exist!"
@@ -185,7 +208,9 @@ function main()
         /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
     fi
 
-    rm -r "$temp_folder"
+    if ! $child; then
+        rm -r "$write_dir"
+    fi
     return $return_value
 }
 
@@ -222,5 +247,5 @@ if echo "${shource_args[@]}" | grep -q -wiEe "-h|--help|help"; then
 fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-parse_args run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${indent:-}" "${command_args[@]}"; exit $?
+parse_args child run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child:-false}" "${command_args[@]}"; exit $?
