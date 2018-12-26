@@ -2,96 +2,144 @@
 
 # Loops through passed in args and sets variables for each of them
 # Call like this: _parse_args help refresh debug -- "${@}"
+shource log()
+
+function parse_these()
+{
+    local boolean_flags=()
+    local array_flags=()
+    local input_args=( "${@}" )
+    local num_args=${#input_args[@]}
+    local this_arg i key value arg_type
+
+    log 2 "Called parse_args with these arguments: ${input_args[@]}"
+
+    for (( i=0; i<num_args; i++ )); do
+        this_arg="${input_args[$i]}"
+        if [[ $this_arg == "--" ]]; then
+            i=$(( i + 1 ))
+            break
+        fi
+        local arg_type=$BOOL_TYPE
+
+        if [[ $this_arg == *:b* ]]; then
+            arg_type=$BOOL_TYPE
+        elif [[ $this_arg == *:a* ]]; then
+            arg_type=$ARRAY_TYPE
+        fi
+
+        local flag="$( echo "${this_arg}" | tr '_-' '.' | sed 's/^-*//' | cut -d: -f1 )"
+
+        log 4 "$i : $this_arg : $arg_type"
+
+        case "$arg_type" in
+            $BOOL_TYPE)
+                boolean_flags+=( "$flag" )
+            ;;
+            $ARRAY_TYPE)
+                array_flags+=( "$flag" )
+            ;;
+        esac
+    done
+
+    local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )
+    boolean_regex="^--(no-)?(${boolean_regex})(=(true|false))?$"
+
+    local array_regex=$( IFS='|'; echo "${array_flags[*]}" )
+    array_regex="^--(${array_regex})(=(.*))?$"
+
+    local populate_args=false
+    declare -g -a _args=()
+    for (( ; i<num_args; i++ )); do
+        this_arg="${input_args[$i]}"
+        log 4 "$i : $this_arg"
+
+        if [[ $this_arg == "--" ]]; then
+            populate_args=true
+            continue
+        fi
+
+        key=""
+        value=true
+        kind=$STRING_TYPE
+
+        # Boolean flags
+        if $populate_args; then
+            key="_args"
+            value="$this_arg"
+            kind=$ARRAY_TYPE
+        elif [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
+            key="${BASH_REMATCH[2]}"
+
+            if [[ ${BASH_REMATCH[4]} == "false" ]]; then
+                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
+                    value=true
+                else
+                    value=false
+                fi
+            else
+                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
+                    value=false
+                else
+                    value=true
+                fi
+            fi
+            kind=$BOOL_TYPE
+        elif [[ ${#array_flags[@]} -gt 0 ]] && [[ $this_arg =~ $array_regex ]]; then
+            key="${BASH_REMATCH[1]}"
+            if [[ ${BASH_REMATCH[2]} == "" ]]; then
+                ((i++))
+                value="${input_args[$i]}"
+            else
+                value="${BASH_REMATCH[3]}"
+            fi
+
+            kind=$ARRAY_TYPE
+        elif [[ $this_arg =~ ^--([^=]+)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            kind=$STRING_TYPE
+        elif [[ $this_arg =~ ^--(.+)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            ((i++))
+            value="${input_args[$i]}"
+            kind=$STRING_TYPE
+        fi
+
+        key="${key//-/_}"
+        if [[ $key == "" ]]; then
+            key="_args"
+            value="$this_arg"
+            kind=$ARRAY_TYPE
+        fi
+        printf "%s:%s:%s\n" "$kind" "$key" "$( printf "%s" "$value" | base64 -w0 )"
+    done
+}
+
 function parse_args()
 {
     local reset_x=false
+    local ARRAY_TYPE=array BOOL_TYPE=boolean STRING_TYPE=string
 
     if [[ $- =~ x ]]; then
         reset_x=true
     fi
     set +x
-    shource log()
 
-    function parse_these()
-    {
-        local boolean_flags=()
-        local input_args=( "${@}" )
-        local num_args=${#input_args[@]}
-        local this_arg i key value
-
-        log 2 "Called parse_args with these arguments: ${input_args[@]}"
-
-        for (( i=0; i<num_args; i++ )); do
-            this_arg="${input_args[$i]}"
-            log 4 "$i : $this_arg"
-            if [[ $this_arg == "--" ]]; then
-                i=$(( i + 1 ))
-                break
-            fi
-            boolean_flags+=( "$( echo "${this_arg}" | tr '_-' '.' | sed 's/^-*//' )" )
-        done
-
-        local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )
-        boolean_regex="^--(no-)?(${boolean_regex})(=(true|false))?$"
-
-        local populate_args=false
-        declare -g -a _args=()
-        for (( ; i<num_args; i++ )); do
-            this_arg="${input_args[$i]}"
-            log 4 "$i : $this_arg"
-
-            if [[ $this_arg == "--" ]]; then
-                populate_args=true
-                continue
-            fi
-
-            key=""
-            value=true
-
-            # Boolean flags
-            if $populate_args; then
-                key="_args"
-                value="$this_arg"
-            elif [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
-                key="${BASH_REMATCH[2]}"
-
-                if [[ ${BASH_REMATCH[4]} == "false" ]]; then
-                    if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
-                        value=true
-                    else
-                        value=false
-                    fi
-                else
-                    if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
-                        value=false
-                    else
-                        value=true
-                    fi
-                fi
-            elif [[ $this_arg =~ ^--([^=]+)=(.*)$ ]]; then
-                key="${BASH_REMATCH[1]}"
-                value="${BASH_REMATCH[2]}"
-            elif [[ $this_arg =~ ^--(.+)$ ]]; then
-                key="${BASH_REMATCH[1]}"
-                ((i++))
-                value="${input_args[$i]}"
-            fi
-            key="${key//-/_}"
-            if [[ $key == "" ]]; then
-                key="_args"
-                value="$this_arg"
-            fi
-            printf "%s:%s\n" "$key" "$( printf "%s" "$value" | base64 -w0 )"
-        done
-    }
 
     local key b64value
     _args=()
-    while IFS=':' read key b64value; do
+    while IFS=':' read kind key b64value; do
         local value=$( echo "$b64value" | base64 --decode )
+        local indirect this_arr
 
-        if [[ $key == "_args" ]]; then
-            _args+=( "${value}" )
+        if [[ $kind == "$ARRAY_TYPE" ]]; then
+            declare -n this_arr="$key"
+            if [[ ${#this_arr[@]} -gt 0 ]]; then
+                this_arr=( "${this_arr[@]}" "${value}" )
+            else
+                this_arr=( "${value}" )
+            fi
         else
             declare -g "$key"="$value"
         fi
