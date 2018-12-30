@@ -135,6 +135,11 @@ function parse_args()
 
         if [[ $kind == "$ARRAY_TYPE" ]]; then
             declare -n this_arr="$key"
+
+            # IF this_arr is unset
+            if [[ -z ${this_arr+x} ]]; then
+                this_arr=()
+            fi
             if [[ ${#this_arr[@]} -gt 0 ]]; then
                 this_arr=( "${this_arr[@]}" "${value}" )
             else
