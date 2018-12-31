@@ -1,0 +1,12 @@
+#!/bin/bash
+
+function ping_statuscake()
+{(
+    local url="$1"
+    local time="$2"
+    local sc_url
+    if [[ $url != "" ]]; then
+        sc_url=$( echo "$url" | sed -r -e 's/&?[tT][iI][mM][eE]=[^&]*//; s/[?][&]/?/' )  # Remove the time section of the url 
+        curl --silent --show-error --retry 5 "${sc_url}&time=${time}"
+    fi
+)}

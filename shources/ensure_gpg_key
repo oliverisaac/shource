@@ -7,14 +7,37 @@ function ensure_gpg_key()
 
     # Fetch the gpg key. If that fails, and we have it, then just move on
     local key="$1"
-    local keyserver="${2:-}"
+    local keyservers="${2:-${GPG_KEYSERVER:-}}"
     local wait_time="${3:-10}"
     local key_fetch_result=""
+    local keyserver
 
-    until key_fetch_result=$( { gpg ${keyserver:+--keyserver} $keyserver --no-tty --recv-key "$key" || gpg --no-tty --list-key "$key"; } 2>&1 ); do
-        log 2 "$key_fetch_result"
-        log 2 "Waiting for GPG key${keyserver:+ from $keyserver}: $key"
+    # Ensure keyservers is an array of either keyservers or one empty element
+    if [[ $keyservers != "" ]]; then
+        keyservers=( $( echo "$keyservers" | tr ',;' ' ' ) )
+    else
+        keyservers=( "" )
+    fi
+
+    while true; do
+        for keyserver in "${keyservers[@]}"; do
+            local args=()
+
+            if [[ $keyserver != "" ]]; then
+                args+=( --keyserver "$keyserver" )
+            fi
+            args+=( --no-tty --recv-key "$key" )
+
+            if gpg "${args[@]}"; then
+                log 0 "Got GPG key${keyserver:+ from $keyserver}: $key"
+                return 0
+            elif gpg --no-tty --list-key "$key"; then
+                log 0 "Already have GPG key: $key"
+                return 0
+            else
+                log 2 "Waiting for GPG key${keyserver:+ from $keyserver}: $key"
+            fi
+        done
         sleep $wait_time
     done
-    log 1 "$key_fetch_result"
 )}

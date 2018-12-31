@@ -1,0 +1,14 @@
+#!/bin/bash
+
+shource log()
+
+function _auto_log()
+{(
+    while read -r line; do
+        log 0 "$line" &> /dev/stderr
+    done
+)}
+
+exec 9>&2
+exec 2> >( _auto_log )
+export USING_AUTO_LOG=true

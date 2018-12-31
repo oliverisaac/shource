@@ -6,22 +6,29 @@ function log()
 {(
     set +x
 
+    if ${USING_AUTO_LOG:-false}; then
+        exec 2>&9
+    fi
 
-    local level="$1"
-    shift
+    local level=0
+    if [[ $1 =~ ^-?[0-9]+$ ]]; then
+        local level="$1"
+        shift
+    fi
     local args=( "${@}" )
     if [[ $level -le ${LOG_LEVEL:-0} ]]; then
         local time=$( date "+%Y-%m-%d %H:%M:%S.%3N" )
         local message="${@}"
 
         if [[ ${JSON_LOG_FORMAT:-false} == "false" ]]; then
-            echo "$time [log $level]: $message" >&2
+            echo "$time [log $level]: $message" > /dev/stderr
         else
             time=$( date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" )
             # We subtract one line number because shource adds a line at the beginning
-            json_print time:s "$time" level:d "$level" msg:s "$message" source:s "$( _short_stack )" >&2
+            json_print time:s "$time" level:d "$level" msg:s "$message" source:s "$( _short_stack )" > /dev/stderr
         fi
     fi
-)}
+) 
+}
 
 
