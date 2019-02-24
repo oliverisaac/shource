@@ -1,0 +1,8 @@
+#!/bin/bash
+
+function ensure_gpg_file()
+{(
+    local file="$1"
+    [[ -e "$file" ]]
+    gpg --no-tty --import "$file"
+)}

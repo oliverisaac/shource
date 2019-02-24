@@ -81,7 +81,7 @@ function shource_to_filepath()
 function sanitize_shource_folder()
 {
     local shource_folder="$1"
-    echo "$shource_folder" | sed -r 's/\/+/\//g' | sed -r 's/\/+$//;' | sed -r 's/shources$//' 
+    echo "$shource_folder" | gsed -r 's/\/+/\//g' | gsed -r 's/\/+$//;' | gsed -r 's/shources$//' 
 }
 
 function main()
@@ -179,7 +179,7 @@ function main()
     done < <( cat "$source_file" ) 
 
     if $print_tag; then
-        echo "$tag" | sed -i"" -e '1 r /dev/stdin' "$temp_write"
+        echo "$tag" | gsed -i"" -e '1 r /dev/stdin' "$temp_write"
     fi
 
     if $create || ! $run; then
@@ -216,14 +216,14 @@ function main()
 
 function _display_help()
 {
-    cat - > >( sed -r -e "s/^ {,8}//" ) <<EOF
+    cat - > >( gsed -r -e "s/^ {,8}//" ) <<EOF
         Sample help file
         TADA!
 EOF
 }
 
 
-# Loops through passed in args and sets variables for each of them
+# Loops through pasgsed in args and sets variables for each of them
 # Call like this: _parse_args help refresh debug -- "${@}"
 function parse_args()
 {
@@ -353,7 +353,7 @@ function log()
                 i=$(( i + 1 ))
                 break
             fi
-            boolean_flags+=( "$( echo "${this_arg}" | tr '_-' '.' | sed 's/^-*//' )" )
+            boolean_flags+=( "$( echo "${this_arg}" | tr '_-' '.' | gsed 's/^-*//' )" )
         done
 
         local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )

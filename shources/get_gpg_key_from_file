@@ -1,0 +1,7 @@
+#!/bin/bash
+
+function get_gpg_key_from_file(){(
+    local file="$1"
+    [[ -e  "$file" ]]
+    gpg --no-tty --with-colons --dry-run "$file" | awk -F: '{ if ( $1 == "pub" ) { print $5; } }'
+)}

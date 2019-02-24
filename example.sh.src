@@ -1,5 +1,26 @@
 #!/usr/bin/env bash
 
-shource oliverisaac/shource-scripts:hello_world()
+export LOG_LEVEL=4
+shource parse_args()
+shource join()
+shource auto_log()
 
-hello_world
+parse_args bool ns:array arr:a create:b -- "${@}"
+
+{
+
+date
+date
+date
+date
+date
+echo "bool: $bool"
+echo "create: $create"
+for x in "${!ns[@]}"; do
+    echo "ns-$x: ${ns[$x]}"
+done
+
+echo "$( join " " "${arr[@]}" )"
+} >&2
+
+wait

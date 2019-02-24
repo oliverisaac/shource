@@ -35,6 +35,7 @@ function parse_these()
         case "$arg_type" in
             $BOOL_TYPE)
                 boolean_flags+=( "$flag" )
+                printf "%s:%s:%s\n" "$arg_type" "${flag//./_}" "$( echo false | base64 -w0 )"
             ;;
             $ARRAY_TYPE)
                 array_flags+=( "$flag" )
@@ -128,21 +129,19 @@ function parse_args()
 
 
     local key b64value
-    _args=()
+    declare -a -g this_arr
     while IFS=':' read kind key b64value; do
         local value=$( echo "$b64value" | base64 --decode )
-        local indirect this_arr
 
-        if [[ $kind == "$ARRAY_TYPE" ]]; then
+        if [[ "$kind" == "$ARRAY_TYPE" ]]; then
             declare -n this_arr="$key"
 
-            # IF this_arr is unset
-            if [[ -z ${this_arr+x} ]]; then
-                this_arr=()
-            fi
-            if [[ ${#this_arr[@]} -gt 0 ]]; then
+            # If this_arr is unset
+            if [[ -v $key[@] ]]; then
                 this_arr=( "${this_arr[@]}" "${value}" )
             else
+                declare -g -a $key
+                declare -n this_arr="$key"
                 this_arr=( "${value}" )
             fi
         else
@@ -151,5 +150,6 @@ function parse_args()
     done < <( parse_these "${@}" ) 
 
     $reset_x && set -x || true
+
     return 0
 }
