@@ -16,6 +16,14 @@ readonly git_dir=~/.shource
 
 export orig_shource_dir="${orig_shource_dir:-$self_dir}"
 
+if which gsed &>/dev/null; then
+    function sed(){
+        gsed "${@}"
+    }
+
+    export -f sed
+fi
+
 # This function receives a shource "path" and turns it into a file that can be read
 function shource_to_filepath()
 {
