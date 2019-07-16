@@ -22,9 +22,11 @@ function parse_these()
         fi
         local arg_type=$BOOL_TYPE
 
-        if [[ $this_arg == *:b* ]]; then
+        regex_bool='^.*:b(ool(ean)?)?$'
+        regex_array='^.*:a(rr(ay)?)?$'
+        if [[ $this_arg =~ "${regex_bool}" ]]; then
             arg_type=$BOOL_TYPE
-        elif [[ $this_arg == *:a* ]]; then
+        elif [[ $this_arg =~ "${regex_array}" ]]; then
             arg_type=$ARRAY_TYPE
         fi
 
