@@ -5,22 +5,11 @@ shource parse_args()
 shource join()
 shource auto_log()
 
-parse_args bool ns:array arr:a create:b -- "${@}"
+parse_args bool:b:boolean namespace:ns:array name:n:string -- "${@}"
 
-{
-
-date
-date
-date
-date
-date
 echo "bool: $bool"
-echo "create: $create"
+echo "name: $name"
 for x in "${!ns[@]}"; do
     echo "ns-$x: ${ns[$x]}"
 done
 
-echo "$( join " " "${arr[@]}" )"
-} >&2
-
-wait

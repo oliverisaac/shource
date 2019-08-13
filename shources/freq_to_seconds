@@ -30,3 +30,4 @@ function freq_to_seconds()
     echo "$time"
 
 )}
+export -f freq_to_seconds

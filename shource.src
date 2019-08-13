@@ -129,7 +129,7 @@ function main()
 
         target_file="${source_file%.src}"
         if [[ -e "$target_file" ]] && ! $overwrite; then
-            local second_line=$( cat "$target_file" | head -n2 | tail -n1 )
+            local second_line=$( cat "$target_file" | sed -n -e '2 p')
             if [[ $second_line != "$tag" ]]; then
                 log 0 "You will accidently overwrite $target_file if you continue! Use --force to allow overwrites"
                 exit 4
@@ -253,5 +253,5 @@ if echo "${shource_args[@]}" | grep -q -wiEe "-h|--help|help"; then
 fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-parse_args child run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child:-false}" "${command_args[@]}"; exit $?
+parse_args child:bool run:bool make_exec:bool print_tag:bool print_shebang:bool create:bool force:bool indent:string shource_folder:string write_dir:string -- "${shource_args[@]}"
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag}" "${run}" "${no_print_shebang}" "${no_make_exec}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child:-false}" "${command_args[@]}"; exit $?

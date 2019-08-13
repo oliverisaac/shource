@@ -17,4 +17,5 @@ function _print_stack()
       echo "   at: $func $src:$linen"
    done
 )}
+export -f _print_stack
 

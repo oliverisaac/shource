@@ -47,32 +47,47 @@ function parse_these()
             log -1 "Error with pars args, unexpected config: $this_arg"
         fi
 
+        # We want to be able to match both dry_run and dry-run
         long_flag="${BASH_REMATCH[1]}"
-        short_flag="${BASH_REMATCH[3]}"
-        var_name="$long_flag"
+        long_flag="${long_flag//[-_.]/_}"
+        var_name="${long_flag}"
 
-        log 4 "$i : $this_arg : $arg_type"
+        short_flag="${BASH_REMATCH[3]}"
+
+        log 4 "$i : long: $long_flag short: $short_flag type: $arg_type"
 
         case "$arg_type" in
             $BOOL_TYPE)
-                boolean_long_flags+=( "$long_flag" )
-                boolean_short_flags+=( "$short_flag" )
-                boolean_flag_maps+=( "$short_flag:$var_name" "$long_flag:$var_name" )
-                # Always add false to a flag so it is always set
-                # ZmFsc2UK is false base64 encoded
-                printf "%s:%s:%s\n" "$arg_type" "${var_name//./_}" "ZmFsc2UK"
+                boolean_long_flags+=( "${long_flag//_/[-_.]}" )
+                boolean_flag_maps+=( "$long_flag:$var_name" )
+
+                if [[ -n $short_flag ]]; then
+                    boolean_short_flags+=( "$short_flag" )
+                    boolean_flag_maps+=( "$short_flag:$var_name" )
+                fi
             ;;
             $ARRAY_TYPE)
-                array_long_flags+=( "$long_flag" )
-                array_short_flags+=( "$short_flag" )
-                array_flag_maps+=( "$short_flag:$var_name" "$long_flag:$var_name" )
+                array_long_flags+=( "${long_flag//_/[-_.]}" )
+                array_flag_maps+=( "$long_flag:$var_name" )
+
+                if [[ -n $short_flag ]]; then
+                    array_short_flags+=( "$short_flag" )
+                    array_flag_maps+=( "$short_flag:$var_name" )
+                fi
             ;;
             $STRING_TYPE)
-                string_long_flags+=( "$long_flag" )
-                string_short_flags+=( "$short_flag" )
-                string_flag_maps+=( "$short_flag:$var_name" "$long_flag:$var_name" )
+                string_long_flags+=( "${long_flag//_/[-_.]}" )
+                string_flag_maps+=( "$long_flag:$var_name" )
+
+                if [[ -n $short_flag ]]; then
+                    string_short_flags+=( "$short_flag" )
+                    string_flag_maps+=( "$short_flag:$var_name" )
+                fi
             ;;
         esac
+
+        # Initialize each arge
+        printf "%s:%s:%s\n" "$arg_type" "${var_name//./_}" "init"
     done
 
     # Want to match: --debug --no-debug -d --debug=false --debug=true -d=false -d=true -d false -d true --debug false --debug true 
@@ -80,18 +95,21 @@ function parse_these()
     local boolean_short_regex=$( IFS='|'; echo "${boolean_short_flags[*]}" )
     boolean_regex="^(--(no-)?(${boolean_long_regex})|-(${boolean_short_regex}))(=(true|false))?$"
     log 4 "bool regex: $boolean_regex"
+    log 5 "boolean_flag_maps: ${boolean_flag_maps[@]}"
 
     # Want to match: --name=bob --name bob -n bob -n=bob
     local string_long_regex=$( IFS='|'; echo "${string_long_flags[*]}" )
     local string_short_regex=$( IFS='|'; echo "${string_short_flags[*]}" )
     string_regex="^(--(${string_long_regex})|-(${string_short_regex}))(=(.*))?$"
     log 4 "string regex: $string_regex"
+    log 5 "string_flag_maps: ${stringean_flag_maps[@]}"
 
     # Want to match: --name=bob --name bob -n bob -n=bob
     local array_long_regex=$( IFS='|'; echo "${array_long_flags[*]}" )
     local array_short_regex=$( IFS='|'; echo "${array_short_flags[*]}" )
     array_regex="^(--(${array_long_regex})|-(${array_short_regex}))(=(.*))?$"
     log 4 "array regex: $array_regex"
+    log 5 "array_flag_maps: ${array_flag_maps[@]}"
 
     local populate_args=false
     declare -g -a _args=()
@@ -133,6 +151,7 @@ function parse_these()
 
             # Get the var name from the flag
             search_regex=$( IFS='|' echo "${search_keys[*]}" )
+            search_regex="${search_regex//[-_.]/_}"
             key=$( printf "%s\n" "${boolean_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
 
             if [[ $equals_part == "" ]]; then
@@ -179,6 +198,8 @@ function parse_these()
 
             # Get the var name from the flag
             search_regex=$( IFS='|' echo "${search_keys[*]}" )
+            search_regex="${search_regex//[-_.]/_}"
+            log 6 "Looking in string_flag_maps for $search_regex"
             key=$( printf "%s\n" "${string_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
 
             if [[ $equals_value == "" ]]; then
@@ -209,6 +230,7 @@ function parse_these()
 
             # Get the var name from the flag
             search_regex=$( IFS='|' echo "${search_keys[*]}" )
+            search_regex="${search_regex//[-_.]/_}"
             key=$( printf "%s\n" "${array_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
 
             if [[ $equals_value == "" ]]; then
@@ -220,6 +242,10 @@ function parse_these()
             else
                 value="$equals_value"
             fi
+        else
+            key="_args"
+            value="$this_arg"
+            kind=$ARRAY_TYPE
         fi
 
         key="${key//-/_}"
@@ -231,6 +257,7 @@ function parse_these()
         printf "%s:%s:%s\n" "$kind" "$key" "$( base64 -w0 <<< "$value" )"
     done
 }
+export -f parse_these
 
 function parse_args()
 {
@@ -244,23 +271,41 @@ function parse_args()
 
 
     local key b64value
-    declare -a -g this_arr
     while IFS=':' read kind key b64value; do
-        local value=$( echo "$b64value" | base64 --decode )
+        local value
+        local init=false
+        if [[ $b64value == "init" ]]; then
+            init=true
+        else
+            value=$( echo "$b64value" | base64 --decode )
+        fi
 
         if [[ "$kind" == "$ARRAY_TYPE" ]]; then
             declare -n this_arr="$key"
-
-            # If this_arr is unset
-            if [[ -v $key[@] ]]; then
-                this_arr=( "${this_arr[@]}" "${value}" )
+            if $init; then
+                this_arr=()
             else
-                declare -g -a $key
-                declare -n this_arr="$key"
-                this_arr=( "${value}" )
+                this_arr=( "${this_arr[@]}" "${value}" )
             fi
-        else
-            declare -g "$key"="$value"
+        elif [[ "$kind" == "$BOOL_TYPE" ]]; then
+            if $init; then
+                declare -g "$key"="false"
+                declare -g "no_$key"="true"
+            else
+                if $value; then
+                    declare -g "$key"="true"
+                    declare -g "no_$key"="false"
+                else
+                    declare -g "no_$key"="true"
+                    declare -g "$key"="false"
+                fi
+            fi
+        elif [[ "$kind" == "$STRING_TYPE" ]]; then
+            if $init; then
+                declare -g "$key"=""
+            else
+                declare -g "$key"="$value"
+            fi
         fi
     done < <( parse_these "${@}" ) 
 
@@ -268,3 +313,4 @@ function parse_args()
 
     return 0
 }
+export -f parse_args

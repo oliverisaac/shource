@@ -12,3 +12,4 @@ function _on_error()
     echo "ERROR (${pipe_fails[@]}) on line $1: Most recent call last:" >&2
     _print_stack >&2
 ) }
+export -f _on_error

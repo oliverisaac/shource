@@ -19,3 +19,4 @@ function join()
         printf "%s" "$x"
     done
 )}
+export -f join

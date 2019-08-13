@@ -44,3 +44,4 @@ function ensure_gpg_key()
 
     return 0
 )}
+export -f ensure_gpg_key

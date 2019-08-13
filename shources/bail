@@ -12,3 +12,4 @@ function bail()
     kill "$SCRIPT_PID"
     return 1
 )}
+export -f bail

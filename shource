@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 # vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 ft=sh:
 
 set -e # Exit on any error. Use `COMMAND || true` to nullify
@@ -128,7 +130,7 @@ function main()
 
         target_file="${source_file%.src}"
         if [[ -e "$target_file" ]] && ! $overwrite; then
-            local second_line=$( cat "$target_file" | head -n2 | tail -n1 )
+            local second_line=$( cat "$target_file" | sed -n -e '2 p')
             if [[ $second_line != "$tag" ]]; then
                 log 0 "You will accidently overwrite $target_file if you continue! Use --force to allow overwrites"
                 exit 4
@@ -228,11 +230,19 @@ function _display_help()
 EOF
 }
 
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 
 # Loops through passed in args and sets variables for each of them
 # Call like this: _parse_args help refresh debug -- "${@}"
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 
 function json_escape()
 {(
@@ -286,6 +296,8 @@ function json_print()
     printf "%s\n" "}"
 )}
 
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 
 function _short_stack()
 {(
@@ -344,8 +356,16 @@ function log()
 
 function parse_these()
 {
-    local boolean_flags=()
-    local array_flags=()
+    local boolean_long_flags=()
+    local boolean_short_flags=()
+    local boolean_flag_maps=()
+    local string_long_flags=()
+    local string_short_flags=()
+    local string_flag_maps=()
+    local array_long_flags=()
+    local array_short_flags=()
+    local array_flag_maps=()
+
     local input_args=( "${@}" )
     local num_args=${#input_args[@]}
     local this_arg i key value arg_type
@@ -360,34 +380,86 @@ function parse_these()
         fi
         local arg_type=$BOOL_TYPE
 
-        regex_bool='^.*:b(ool(ean)?)?$'
-        regex_array='^.*:a(rr(ay)?)?$'
-        if [[ $this_arg =~ "${regex_bool}" ]]; then
+        flag_regex='^([a-zA-Z0-9_-]+)(:([a-zA-Z]))?'
+        regex_bool="${flag_regex}:b(ool(ean)?)?$"
+        regex_array="${flag_regex}:a(rr(ay)?)?$"
+        regex_string="${flag_regex}:s(tr(ing)?)?$"
+        if [[ $this_arg =~ ${regex_bool} ]]; then
             arg_type=$BOOL_TYPE
-        elif [[ $this_arg =~ "${regex_array}" ]]; then
+        elif [[ $this_arg =~ ${regex_array} ]]; then
             arg_type=$ARRAY_TYPE
+        elif [[ $this_arg =~ ${regex_string} ]]; then
+            arg_type=$STRING_TYPE
+        else
+            log 0 "bool regex: $regex_bool"
+            log 0 "array regex: $regex_array"
+            log 0 "string regex: $regex_string"
+            log -1 "Error with pars args, unexpected config: $this_arg"
         fi
 
-        local flag="$( echo "${this_arg}" | tr '_-' '.' | sed 's/^-*//' | cut -d: -f1 )"
+        # We want to be able to match both dry_run and dry-run
+        long_flag="${BASH_REMATCH[1]}"
+        long_flag="${long_flag//[-_.]/_}"
+        var_name="${long_flag}"
 
-        log 4 "$i : $this_arg : $arg_type"
+        short_flag="${BASH_REMATCH[3]}"
+
+        log 4 "$i : long: $long_flag short: $short_flag type: $arg_type"
 
         case "$arg_type" in
             $BOOL_TYPE)
-                boolean_flags+=( "$flag" )
-                printf "%s:%s:%s\n" "$arg_type" "${flag//./_}" "$( echo false | base64 -w0 )"
+                boolean_long_flags+=( "${long_flag//_/[-_.]}" )
+                boolean_flag_maps+=( "$long_flag:$var_name" )
+
+                if [[ -n $short_flag ]]; then
+                    boolean_short_flags+=( "$short_flag" )
+                    boolean_flag_maps+=( "$short_flag:$var_name" )
+                fi
             ;;
             $ARRAY_TYPE)
-                array_flags+=( "$flag" )
+                array_long_flags+=( "${long_flag//_/[-_.]}" )
+                array_flag_maps+=( "$long_flag:$var_name" )
+
+                if [[ -n $short_flag ]]; then
+                    array_short_flags+=( "$short_flag" )
+                    array_flag_maps+=( "$short_flag:$var_name" )
+                fi
+            ;;
+            $STRING_TYPE)
+                string_long_flags+=( "${long_flag//_/[-_.]}" )
+                string_flag_maps+=( "$long_flag:$var_name" )
+
+                if [[ -n $short_flag ]]; then
+                    string_short_flags+=( "$short_flag" )
+                    string_flag_maps+=( "$short_flag:$var_name" )
+                fi
             ;;
         esac
+
+        # Initialize each arge
+        printf "%s:%s:%s\n" "$arg_type" "${var_name//./_}" "init"
     done
 
-    local boolean_regex=$( IFS='|'; echo "${boolean_flags[*]}" )
-    boolean_regex="^--(no-)?(${boolean_regex})(=(true|false))?$"
+    # Want to match: --debug --no-debug -d --debug=false --debug=true -d=false -d=true -d false -d true --debug false --debug true 
+    local boolean_long_regex=$( IFS='|'; echo "${boolean_long_flags[*]}" )
+    local boolean_short_regex=$( IFS='|'; echo "${boolean_short_flags[*]}" )
+    boolean_regex="^(--(no-)?(${boolean_long_regex})|-(${boolean_short_regex}))(=(true|false))?$"
+    log 4 "bool regex: $boolean_regex"
+    log 5 "boolean_flag_maps: ${boolean_flag_maps[@]}"
 
-    local array_regex=$( IFS='|'; echo "${array_flags[*]}" )
-    array_regex="^--(${array_regex})(=(.*))?$"
+    # Want to match: --name=bob --name bob -n bob -n=bob
+    local string_long_regex=$( IFS='|'; echo "${string_long_flags[*]}" )
+    local string_short_regex=$( IFS='|'; echo "${string_short_flags[*]}" )
+    string_regex="^(--(${string_long_regex})|-(${string_short_regex}))(=(.*))?$"
+    log 4 "string regex: $string_regex"
+    log 5 "string_flag_maps: ${stringean_flag_maps[@]}"
+
+    # Want to match: --name=bob --name bob -n bob -n=bob
+    local array_long_regex=$( IFS='|'; echo "${array_long_flags[*]}" )
+    local array_short_regex=$( IFS='|'; echo "${array_short_flags[*]}" )
+    array_regex="^(--(${array_long_regex})|-(${array_short_regex}))(=(.*))?$"
+    log 4 "array regex: $array_regex"
+    log 5 "array_flag_maps: ${array_flag_maps[@]}"
 
     local populate_args=false
     declare -g -a _args=()
@@ -403,48 +475,127 @@ function parse_these()
         key=""
         value=true
         kind=$STRING_TYPE
-
+        
         # Boolean flags
         if $populate_args; then
             key="_args"
             value="$this_arg"
             kind=$ARRAY_TYPE
-        elif [[ ${#boolean_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
-            key="${BASH_REMATCH[2]}"
+        elif [[ ${#boolean_flag_maps[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
+            kind=$BOOL_TYPE
 
-            if [[ ${BASH_REMATCH[4]} == "false" ]]; then
-                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
-                    value=true
-                else
-                    value=false
+            negation_part="${BASH_REMATCH[2]}"
+            long_key="${BASH_REMATCH[3]}"
+            short_key="${BASH_REMATCH[4]}"
+            equals_part="${BASH_REMATCH[5]}"
+            equals_value="${BASH_REMATCH[6]}"
+            value=true
+
+            search_keys=()
+            if [[ $long_key != "" ]]; then
+                search_keys+=( "$long_key" )
+            fi
+            if [[ $short_key != "" ]]; then
+                search_keys+=( "$short_key" )
+            fi
+
+            # Get the var name from the flag
+            search_regex=$( IFS='|' echo "${search_keys[*]}" )
+            search_regex="${search_regex//[-_.]/_}"
+            key=$( printf "%s\n" "${boolean_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
+
+            if [[ $equals_part == "" ]]; then
+                # If the next arguemnt is true or false, we'll assume it is referrign to this bool
+                peek_value="${input_args[$i+1]:-}"
+                if [[ $peek_value == "true" ]] || [[ $peek_value == "false" ]]; then
+                    ((i++))
+                    value=$peek_value
                 fi
             else
-                if [[ ${BASH_REMATCH[1]} == "no-" ]]; then
+                if [[ $equals_value == "true" ]] || [[ $equals_value == "false" ]]; then
+                    value=$equals_value
+                else
+                    log 0 "Error: a bool flag can only be set to true or false (Got: '$equals_value')"
+                    return 1
+                fi
+            fi
+
+            # Test the negation part of this
+            if [[ $negation_part == "no-" ]]; then
+                # Matches --no-bool false
+                if $value; then
                     value=false
                 else
                     value=true
                 fi
             fi
-            kind=$BOOL_TYPE
-        elif [[ ${#array_flags[@]} -gt 0 ]] && [[ $this_arg =~ $array_regex ]]; then
-            key="${BASH_REMATCH[1]}"
-            if [[ ${BASH_REMATCH[2]} == "" ]]; then
+        elif [[ ${#string_flag_maps[@]} -gt 0 ]] && [[ $this_arg =~ $string_regex ]]; then
+            kind="$STRING_TYPE"
+
+            long_key="${BASH_REMATCH[2]}"
+            short_key="${BASH_REMATCH[3]}"
+            equals_part="${BASH_REMATCH[4]}"
+            equals_value="${BASH_REMATCH[5]}"
+            value=""
+
+            search_keys=()
+            if [[ $long_key != "" ]]; then
+                search_keys+=( "$long_key" )
+            fi
+            if [[ $short_key != "" ]]; then
+                search_keys+=( "$short_key" )
+            fi
+
+            # Get the var name from the flag
+            search_regex=$( IFS='|' echo "${search_keys[*]}" )
+            search_regex="${search_regex//[-_.]/_}"
+            log 6 "Looking in string_flag_maps for $search_regex"
+            key=$( printf "%s\n" "${string_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
+
+            if [[ $equals_value == "" ]]; then
+                if [[ $(( i + 1 )) -gt ${#input_args[@]} ]]; then
+                    log -1 "You must provide a value for --$key"
+                fi
                 ((i++))
                 value="${input_args[$i]}"
             else
-                value="${BASH_REMATCH[3]}"
+                value="$equals_value"
+            fi
+        elif [[ ${#array_flag_maps[@]} -gt 0 ]] && [[ $this_arg =~ $array_regex ]]; then
+            kind="$ARRAY_TYPE"
+
+            long_key="${BASH_REMATCH[2]}"
+            short_key="${BASH_REMATCH[3]}"
+            equals_part="${BASH_REMATCH[4]}"
+            equals_value="${BASH_REMATCH[5]}"
+            value=""
+
+            search_keys=()
+            if [[ $long_key != "" ]]; then
+                search_keys+=( "$long_key" )
+            fi
+            if [[ $short_key != "" ]]; then
+                search_keys+=( "$short_key" )
             fi
 
+            # Get the var name from the flag
+            search_regex=$( IFS='|' echo "${search_keys[*]}" )
+            search_regex="${search_regex//[-_.]/_}"
+            key=$( printf "%s\n" "${array_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
+
+            if [[ $equals_value == "" ]]; then
+                if [[ $(( i + 1 )) -gt ${#input_args[@]} ]]; then
+                    log -1 "You must provide a value for --$key"
+                fi
+                ((i++))
+                value="${input_args[$i]}"
+            else
+                value="$equals_value"
+            fi
+        else
+            key="_args"
+            value="$this_arg"
             kind=$ARRAY_TYPE
-        elif [[ $this_arg =~ ^--([^=]+)=(.*)$ ]]; then
-            key="${BASH_REMATCH[1]}"
-            value="${BASH_REMATCH[2]}"
-            kind=$STRING_TYPE
-        elif [[ $this_arg =~ ^--(.+)$ ]]; then
-            key="${BASH_REMATCH[1]}"
-            ((i++))
-            value="${input_args[$i]}"
-            kind=$STRING_TYPE
         fi
 
         key="${key//-/_}"
@@ -453,9 +604,10 @@ function parse_these()
             value="$this_arg"
             kind=$ARRAY_TYPE
         fi
-        printf "%s:%s:%s\n" "$kind" "$key" "$( printf "%s" "$value" | base64 -w0 )"
+        printf "%s:%s:%s\n" "$kind" "$key" "$( base64 -w0 <<< "$value" )"
     done
 }
+export -f parse_these
 
 function parse_args()
 {
@@ -469,23 +621,41 @@ function parse_args()
 
 
     local key b64value
-    declare -a -g this_arr
     while IFS=':' read kind key b64value; do
-        local value=$( echo "$b64value" | base64 --decode )
+        local value
+        local init=false
+        if [[ $b64value == "init" ]]; then
+            init=true
+        else
+            value=$( echo "$b64value" | base64 --decode )
+        fi
 
         if [[ "$kind" == "$ARRAY_TYPE" ]]; then
             declare -n this_arr="$key"
-
-            # If this_arr is unset
-            if [[ -v $key[@] ]]; then
-                this_arr=( "${this_arr[@]}" "${value}" )
+            if $init; then
+                this_arr=()
             else
-                declare -g -a $key
-                declare -n this_arr="$key"
-                this_arr=( "${value}" )
+                this_arr=( "${this_arr[@]}" "${value}" )
             fi
-        else
-            declare -g "$key"="$value"
+        elif [[ "$kind" == "$BOOL_TYPE" ]]; then
+            if $init; then
+                declare -g "$key"="false"
+                declare -g "no_$key"="true"
+            else
+                if $value; then
+                    declare -g "$key"="true"
+                    declare -g "no_$key"="false"
+                else
+                    declare -g "no_$key"="true"
+                    declare -g "$key"="false"
+                fi
+            fi
+        elif [[ "$kind" == "$STRING_TYPE" ]]; then
+            if $init; then
+                declare -g "$key"=""
+            else
+                declare -g "$key"="$value"
+            fi
         fi
     done < <( parse_these "${@}" ) 
 
@@ -493,6 +663,9 @@ function parse_args()
 
     return 0
 }
+export -f parse_args
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 
 # On exit is called on every exit
 function _on_exit()
@@ -524,6 +697,8 @@ function _on_error()
     exit 1
 }
 
+#!/usr/bin/env bash
+# source code generated using shource: https://github.com/oliverisaac/shource
 
 function _print_stack()
 {(
@@ -568,5 +743,5 @@ if echo "${shource_args[@]}" | grep -q -wiEe "-h|--help|help"; then
 fi
 
 # Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-parse_args child run make_exec print_tag print_shebang create force -- "${shource_args[@]}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${print_tag:-true}" "${run:-default}" "${print_shebang:-true}" "${make_exec:-true}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child:-false}" "${command_args[@]}"; exit $?
+parse_args child:bool run:bool make_exec:bool print_tag:bool print_shebang:bool create:bool force:bool indent:string shource_folder:string write_dir:string -- "${shource_args[@]}"
+main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag}" "${run}" "${no_print_shebang}" "${no_make_exec}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child:-false}" "${command_args[@]}"; exit $?

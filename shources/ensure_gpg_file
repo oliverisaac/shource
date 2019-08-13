@@ -6,3 +6,4 @@ function ensure_gpg_file()
     [[ -e "$file" ]]
     gpg --no-tty --import "$file"
 )}
+export -f ensure_gpg_file

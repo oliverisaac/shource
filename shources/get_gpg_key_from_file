@@ -5,3 +5,4 @@ function get_gpg_key_from_file(){(
     [[ -e  "$file" ]]
     gpg --no-tty --with-colons --dry-run "$file" | awk -F: '{ if ( $1 == "pub" ) { print $5; } }'
 )}
+export -f get_gpg_key_from_file

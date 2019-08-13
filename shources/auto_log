@@ -8,6 +8,7 @@ function _auto_log()
         log 0 "$line" &> /dev/stderr
     done
 )}
+export -f _auto_log
 
 exec 9>&2
 exec 2> >( _auto_log )

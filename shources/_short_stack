@@ -24,3 +24,4 @@ function _short_stack()
     bash_source="${BASH_SOURCE##*/}"
     echo "$bash_source.$response"
 )}
+export -f _short_stack
