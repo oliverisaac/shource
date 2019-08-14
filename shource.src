@@ -246,12 +246,21 @@ for x in "${all_args[@]}"; do
 done
 command_args=( "${@}" )
 
-# Check if any of the args are a cry for help
-if echo "${shource_args[@]}" | grep -q -wiEe "-h|--help|help"; then
-    _display_help
-    exit 4
-fi
+arguments=(
+    child:bool@false/"Whether this is being recursively called" 
+    run:bool@false/"Whether to run the script"
+    make_exec:bool@false/"Whether to chmod  +x the result"
+    print_tag:bool@true/"Whether to print the shource tag in the result"
+    print_shebang:bool@true/"Whether to print the shebang"
+    create:bool@false/"Whether to create a final file"
+    force:bool@false/"Whether to overwrite a file when creating a file"
+    indent:string/"How much to indent each line"
+    shource_folder:string/"The folder shource is running in"
+    write_dir:string/"where we are putting files"
+)
 
-# Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
-parse_args child:bool run:bool make_exec:bool print_tag:bool print_shebang:bool create:bool force:bool indent:string shource_folder:string write_dir:string -- "${shource_args[@]}"
-main "${_args[0]}" "${create:-false}" "${force:-false}" "${no_print_tag}" "${run}" "${no_print_shebang}" "${no_make_exec}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child:-false}" "${command_args[@]}"; exit $?
+parse_args "${arguments[@]}" -- "${shource_args[@]}"
+
+main "${_args[0]}" "${create}" "${force}" "${print_tag}" "${run}" "${print_shebang}" "${make_exec}" "${indent:-}" "${shource_folder:-$self_dir}" "${write_dir:-$( mktemp -d )}" "${child}" "${command_args[@]}";
+
+exit $?

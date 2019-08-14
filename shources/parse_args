@@ -8,13 +8,12 @@ function parse_these()
 {
     local boolean_long_flags=()
     local boolean_short_flags=()
-    local boolean_flag_maps=()
     local string_long_flags=()
     local string_short_flags=()
-    local string_flag_maps=()
     local array_long_flags=()
     local array_short_flags=()
-    local array_flag_maps=()
+    declare -A required_flags
+    declare -A flag_maps
 
     local input_args=( "${@}" )
     local num_args=${#input_args[@]}
@@ -30,10 +29,11 @@ function parse_these()
         fi
         local arg_type=$BOOL_TYPE
 
-        flag_regex='^([a-zA-Z0-9_-]+)(:([a-zA-Z]))?'
-        regex_bool="${flag_regex}:b(ool(ean)?)?$"
-        regex_array="${flag_regex}:a(rr(ay)?)?$"
-        regex_string="${flag_regex}:s(tr(ing)?)?$"
+        flag_regex='^([!])?([a-zA-Z0-9_-]+)(:([a-zA-Z]))?'
+        default_help_regex="(@(.*))?(/(.*))"
+        regex_bool="${flag_regex}:b(ool(ean)?)?$default_help_regex$"
+        regex_array="${flag_regex}:a(rr(ay)?)?$default_help_regex$"
+        regex_string="${flag_regex}:s(tr(ing)?)?$default_help_regex$"
         if [[ $this_arg =~ ${regex_bool} ]]; then
             arg_type=$BOOL_TYPE
         elif [[ $this_arg =~ ${regex_array} ]]; then
@@ -44,50 +44,68 @@ function parse_these()
             log 0 "bool regex: $regex_bool"
             log 0 "array regex: $regex_array"
             log 0 "string regex: $regex_string"
+            log 0 "Proper format for argument config: !long_flag:short_flag:type@default/help_message"
+            log 0 "help_message is required, use ! to indicate required"
             log -1 "Error with pars args, unexpected config: $this_arg"
         fi
 
         # We want to be able to match both dry_run and dry-run
-        long_flag="${BASH_REMATCH[1]}"
-        long_flag="${long_flag//[-_.]/_}"
+        required=false
+        [[ "!" == "${BASH_REMATCH[1]}" ]] && required=true 
+        long_flag="${BASH_REMATCH[2]}"
+        long_flag="${long_flag//[_.-]/_}"
         var_name="${long_flag}"
 
-        short_flag="${BASH_REMATCH[3]}"
+        short_flag="${BASH_REMATCH[4]}"
+        default_value="${BASH_REMATCH[8]}"
+        help_text="${BASH_REMATCH[10]}"
 
-        log 4 "$i : long: $long_flag short: $short_flag type: $arg_type"
+        if $required && [[ -z $default_value ]]; then
+            required_flags[$var_name]=false
+        else
+            required=false
+        fi
+
+        local short_flags
+        local long_flags
 
         case "$arg_type" in
             $BOOL_TYPE)
-                boolean_long_flags+=( "${long_flag//_/[-_.]}" )
-                boolean_flag_maps+=( "$long_flag:$var_name" )
-
-                if [[ -n $short_flag ]]; then
-                    boolean_short_flags+=( "$short_flag" )
-                    boolean_flag_maps+=( "$short_flag:$var_name" )
-                fi
+                declare -n short_flags=boolean_short_flags
+                declare -n long_flags=boolean_long_flags
+                [[ -z $default_value ]] && default_value="false"
             ;;
             $ARRAY_TYPE)
-                array_long_flags+=( "${long_flag//_/[-_.]}" )
-                array_flag_maps+=( "$long_flag:$var_name" )
-
-                if [[ -n $short_flag ]]; then
-                    array_short_flags+=( "$short_flag" )
-                    array_flag_maps+=( "$short_flag:$var_name" )
-                fi
+                declare -n short_flags=array_short_flags
+                declare -n long_flags=array_long_flags
             ;;
             $STRING_TYPE)
-                string_long_flags+=( "${long_flag//_/[-_.]}" )
-                string_flag_maps+=( "$long_flag:$var_name" )
-
-                if [[ -n $short_flag ]]; then
-                    string_short_flags+=( "$short_flag" )
-                    string_flag_maps+=( "$short_flag:$var_name" )
-                fi
+                declare -n short_flags=string_short_flags
+                declare -n long_flags=string_long_flags
+            ;;
+            * )
+                log -1 "Invalid flag  time: $arg_type"
             ;;
         esac
 
-        # Initialize each arge
-        printf "%s:%s:%s\n" "$arg_type" "${var_name//./_}" "init"
+        log 4 "$i : long: $long_flag short: $short_flag type: $arg_type required: $required default: $default_value help: $help_text"
+
+        long_flags=( "${long_flags[@]}" "${long_flag//_/[-_.]}" )
+        flag_maps[$long_flag]="$var_name"
+        if [[ -n $short_flag ]]; then
+            short_flags=( "${short_flags[@]}" "${short_flag//_/[-_.]}" )
+            flag_maps[$short_flag]="$var_name"
+        fi
+
+        local required_message="Optional"
+        $required && required_message="Required"
+        b64help=$( printf "   %-15s : %s (default: %s) %s" "--${long_flag}${short_flag:+, -}${short_flag}" "$help_text" "$default_value" "$required_message" )
+        b64help=$( echo "$b64help" | base64 -w0 )
+
+        b64default=$( echo "$default_value" | base64 -w0 )
+
+        # Initialize each arg
+        printf "%s:%s:%s:%s:%s\n" "$arg_type" "${var_name//./_}" "init" "$b64default" "$b64help"
     done
 
     # Want to match: --debug --no-debug -d --debug=false --debug=true -d=false -d=true -d false -d true --debug false --debug true 
@@ -95,21 +113,23 @@ function parse_these()
     local boolean_short_regex=$( IFS='|'; echo "${boolean_short_flags[*]}" )
     boolean_regex="^(--(no-)?(${boolean_long_regex})|-(${boolean_short_regex}))(=(true|false))?$"
     log 4 "bool regex: $boolean_regex"
-    log 5 "boolean_flag_maps: ${boolean_flag_maps[@]}"
 
     # Want to match: --name=bob --name bob -n bob -n=bob
     local string_long_regex=$( IFS='|'; echo "${string_long_flags[*]}" )
     local string_short_regex=$( IFS='|'; echo "${string_short_flags[*]}" )
     string_regex="^(--(${string_long_regex})|-(${string_short_regex}))(=(.*))?$"
     log 4 "string regex: $string_regex"
-    log 5 "string_flag_maps: ${stringean_flag_maps[@]}"
 
     # Want to match: --name=bob --name bob -n bob -n=bob
     local array_long_regex=$( IFS='|'; echo "${array_long_flags[*]}" )
     local array_short_regex=$( IFS='|'; echo "${array_short_flags[*]}" )
     array_regex="^(--(${array_long_regex})|-(${array_short_regex}))(=(.*))?$"
     log 4 "array regex: $array_regex"
-    log 5 "array_flag_maps: ${array_flag_maps[@]}"
+
+    log 5 "Flag maps:"
+    for k in "${!flag_maps[@]}"; do
+        log 5 "$k : ${flag_maps[$k]}"
+    done
 
     local populate_args=false
     declare -g -a _args=()
@@ -131,7 +151,7 @@ function parse_these()
             key="_args"
             value="$this_arg"
             kind=$ARRAY_TYPE
-        elif [[ ${#boolean_flag_maps[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
+        elif [[ ${#boolean_long_flags[@]} -gt 0 ]] && [[ $this_arg =~ $boolean_regex ]]; then
             kind=$BOOL_TYPE
 
             negation_part="${BASH_REMATCH[2]}"
@@ -141,18 +161,10 @@ function parse_these()
             equals_value="${BASH_REMATCH[6]}"
             value=true
 
-            search_keys=()
-            if [[ $long_key != "" ]]; then
-                search_keys+=( "$long_key" )
-            fi
-            if [[ $short_key != "" ]]; then
-                search_keys+=( "$short_key" )
-            fi
-
-            # Get the var name from the flag
-            search_regex=$( IFS='|' echo "${search_keys[*]}" )
-            search_regex="${search_regex//[-_.]/_}"
-            key=$( printf "%s\n" "${boolean_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
+            search_key="${long_key:-${short_key}}"
+            search_key="${search_key//[_.-]/_}"
+            key="${flag_maps[$search_key]:-}"
+            [[ -z $key ]] && log -1 "Could not find $search_key as a defined argument"
 
             if [[ $equals_part == "" ]]; then
                 # If the next arguemnt is true or false, we'll assume it is referrign to this bool
@@ -179,7 +191,7 @@ function parse_these()
                     value=true
                 fi
             fi
-        elif [[ ${#string_flag_maps[@]} -gt 0 ]] && [[ $this_arg =~ $string_regex ]]; then
+        elif [[ ${#string_long_flags[@]} -gt 0 ]] && [[ $this_arg =~ $string_regex ]]; then
             kind="$STRING_TYPE"
 
             long_key="${BASH_REMATCH[2]}"
@@ -188,19 +200,10 @@ function parse_these()
             equals_value="${BASH_REMATCH[5]}"
             value=""
 
-            search_keys=()
-            if [[ $long_key != "" ]]; then
-                search_keys+=( "$long_key" )
-            fi
-            if [[ $short_key != "" ]]; then
-                search_keys+=( "$short_key" )
-            fi
-
-            # Get the var name from the flag
-            search_regex=$( IFS='|' echo "${search_keys[*]}" )
-            search_regex="${search_regex//[-_.]/_}"
-            log 6 "Looking in string_flag_maps for $search_regex"
-            key=$( printf "%s\n" "${string_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
+            search_key="${long_key:-${short_key}}"
+            search_key="${search_key//[_.-]/_}"
+            key="${flag_maps[$search_key]:-}"
+            [[ -z $key ]] && log -1 "Could not find $search_key as a defined argument"
 
             if [[ $equals_value == "" ]]; then
                 if [[ $(( i + 1 )) -gt ${#input_args[@]} ]]; then
@@ -211,7 +214,7 @@ function parse_these()
             else
                 value="$equals_value"
             fi
-        elif [[ ${#array_flag_maps[@]} -gt 0 ]] && [[ $this_arg =~ $array_regex ]]; then
+        elif [[ ${#array_long_flags[@]} -gt 0 ]] && [[ $this_arg =~ $array_regex ]]; then
             kind="$ARRAY_TYPE"
 
             long_key="${BASH_REMATCH[2]}"
@@ -220,18 +223,10 @@ function parse_these()
             equals_value="${BASH_REMATCH[5]}"
             value=""
 
-            search_keys=()
-            if [[ $long_key != "" ]]; then
-                search_keys+=( "$long_key" )
-            fi
-            if [[ $short_key != "" ]]; then
-                search_keys+=( "$short_key" )
-            fi
-
-            # Get the var name from the flag
-            search_regex=$( IFS='|' echo "${search_keys[*]}" )
-            search_regex="${search_regex//[-_.]/_}"
-            key=$( printf "%s\n" "${array_flag_maps[@]}" | grep -Ee "^(${search_regex}):" | cut -d: -f2 )
+            search_key="${long_key:-${short_key}}"
+            search_key="${search_key//[_.-]/_}"
+            key="${flag_maps[$search_key]:-}"
+            [[ -z $key ]] && log -1 "Could not find $search_key as a defined argument"
 
             if [[ $equals_value == "" ]]; then
                 if [[ $(( i + 1 )) -gt ${#input_args[@]} ]]; then
@@ -254,8 +249,21 @@ function parse_these()
             value="$this_arg"
             kind=$ARRAY_TYPE
         fi
-        printf "%s:%s:%s\n" "$kind" "$key" "$( base64 -w0 <<< "$value" )"
+
+        required_flags[$key]=true
+        printf "%s:%s:%s:\n" "$kind" "$key" "$( base64 -w0 <<< "$value" )"
     done
+
+    local missing_flags=()
+    for f in "${!required_flags[@]}"; do
+        if ! "${required_flags[$f]}"; then
+            missing_flags+=( "$f" )
+        fi
+    done
+    if [[ ${#missing_flags[@]} -gt 0 ]]; then
+        log -1 "Missing these required flags: ${missing_flags[@]}"
+        exit 1
+    fi
 }
 export -f parse_these
 
@@ -263,19 +271,26 @@ function parse_args()
 {
     local reset_x=false
     local ARRAY_TYPE=array BOOL_TYPE=boolean STRING_TYPE=string
+    local help_texts=()
 
     if [[ $- =~ x ]]; then
         reset_x=true
     fi
     set +x
-
+    local to_parse
+    to_parse=$( parse_these help:h:bool/"Display this help" "${@}" ) 
 
     local key b64value
-    while IFS=':' read kind key b64value; do
+    while IFS=':' read kind key b64value b64default b64help; do
         local value
         local init=false
+        local help_key_width=0
+        local default_value=""
+
         if [[ $b64value == "init" ]]; then
             init=true
+            help_texts+=( "$( echo "$b64help" | base64 --decode )" )
+            default_value=$( echo "$b64default" | base64 --decode )
         else
             value=$( echo "$b64value" | base64 --decode )
         fi
@@ -283,33 +298,46 @@ function parse_args()
         if [[ "$kind" == "$ARRAY_TYPE" ]]; then
             declare -n this_arr="$key"
             if $init; then
-                this_arr=()
+                if [[ -n $default_value ]]; then
+                    this_arr=( "$default_value" )
+                else
+                    this_arr=()
+                fi
             else
                 this_arr=( "${this_arr[@]}" "${value}" )
             fi
         elif [[ "$kind" == "$BOOL_TYPE" ]]; then
             if $init; then
-                declare -g "$key"="false"
-                declare -g "no_$key"="true"
-            else
-                if $value; then
-                    declare -g "$key"="true"
-                    declare -g "no_$key"="false"
-                else
-                    declare -g "no_$key"="true"
-                    declare -g "$key"="false"
+                if [[ -z $default_value ]]; then
+                    default_value=false
                 fi
+                declare -g "$key"="$default_value"
+            else
+                declare -g "$key"="$value"
+            fi
+
+            if ${!key}; then
+                declare -g "no_$key"="false"
+            else
+                declare -g "no_$key"="true"
             fi
         elif [[ "$kind" == "$STRING_TYPE" ]]; then
             if $init; then
-                declare -g "$key"=""
+                declare -g "$key"="${default_value}"
             else
                 declare -g "$key"="$value"
             fi
         fi
-    done < <( parse_these "${@}" ) 
+    done <<< "$to_parse"
 
     $reset_x && set -x || true
+
+    if ${help:-false}; then
+        echo
+        echo "Help for $( basename $0 )" 
+        printf "%s\n" "${help_texts[@]}" | sort
+        exit 0
+    fi >&2
 
     return 0
 }
