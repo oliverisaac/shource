@@ -162,6 +162,7 @@ function main()
                 fi
 
                 echo "$func_path" >> "$log_file"
+                ! [[ -e "$temp_write" ]] || [[ -w "$temp_write" ]] || chmod +w "$temp_write";
                 /usr/bin/env bash "$self" --child --write-dir="$write_dir" --shource-folder="$( dirname "$func_path" )" --no-print-tag --indent="$indent${line_indent}" --no-print-shebang --no-make-exec --no-run "$func_path"  >> "$temp_write"
                 continue
             else
@@ -182,6 +183,7 @@ function main()
         fi
 
         if $print_this_line; then
+            ! [[ -e "$temp_write" ]] || [[ -w "$temp_write" ]] || chmod +w "$temp_write";
             printf "%s\n" "$line" >> "$temp_write"
         fi
     done < <( cat "$source_file" ) 
@@ -200,12 +202,15 @@ function main()
         fi
 
         if $write_to_file; then
+            ! [[ -e "$write_target" ]] || [[ -w "$write_target" ]] || chmod +w "$write_target";
             cat "$temp_write" > "$write_target"
         fi
 
         if $make_exec && [[ $write_target != $default_write_target ]]; then
+            ! [[ -e "$write_target" ]] || [[ -w "$write_target" ]] || chmod +w "$write_target";
             chmod +x "$write_target"
         fi
+        [[ -e $write_target ]] && chmod -w "$write_target"
     fi
 
     # IF the user explicitly asked to run then run. If they didn't ask to create, then run
@@ -214,6 +219,7 @@ function main()
         chmod +x "$temp_write"
         /usr/bin/env bash "$temp_write" "${args[@]}" || return_value=$?
     fi
+
 
     if ! $child; then
         rm -r "$write_dir"
