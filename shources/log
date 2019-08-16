@@ -31,4 +31,68 @@ function log()
 ) 
 }
 
+function info(){(
+    print_color green "${@}"
+)}
+export -f info
 
+function warn(){(
+    print_color yellow "${@}"
+)}
+export -f warn
+
+function error(){(
+    print_color red "${@}"
+)}
+export -f error
+
+function fatal(){
+    print_color 41 "${@}"
+    exit 1
+}
+export -f fatal
+
+function print_color(){(
+    local color="$1"
+    shift
+    local msg=( "${@}" )
+    local bg=0
+    local color
+
+    color_code=0
+    case $color in
+        black)
+            color_code=90
+        ;;
+        red)
+            color_code=91
+        ;;
+        green)
+            color_code=92
+        ;;
+        yellow)
+            color_code=93
+        ;;
+        blue)
+            color_code=94
+        ;;
+        magenta)
+            color_code=95
+        ;;
+        cyan)
+            color_code=96
+        ;;
+        white)
+            color_code=97
+        ;;
+        * )
+            color_code=$color
+        ;;
+    esac
+
+    for item in "${msg[@]}"; do
+        local colored_item=$( printf '\001\e[%d;5;%dm\002%s' "$bg" "$color_code" "$item" )
+        printf "%b\n" '\001\e[0m\002'"${colored_item}"'\001\e[0m\002';
+    done >&2
+)}
+export -f print_color
