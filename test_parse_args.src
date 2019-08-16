@@ -1,0 +1,139 @@
+#!/usr/bin/env shource
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 ft=sh
+
+set -e # Exit on any error. Use `COMMAND || true` to nullify
+set -E # Functions inherit error trap
+set -u # Error on unset variables. Use ${var:-alternate value} to bypass
+set -f # Error on failed file globs (e.g. *.txt )
+set -o pipefail # Failed commands in pipes cause the whole pipe to fail
+
+readonly JSON_LOG_FORMAT=false
+LOG_LEVEL=12
+
+function main()
+{
+    # Execution starts here
+    local del="$1"
+    local name="$2"
+    shift 2
+    local files=( "${@}" )
+
+    if $del; then
+        echo "Delete"
+    else
+        echo "Do not delete"
+    fi
+
+    echo "Hello: $name"
+
+    echo "Files:"
+    printf -- "- %s\n" "${files[@]}"
+
+    return 0
+}
+
+
+shource traps()
+shource log()
+shource parse_args()
+
+trap '_on_term' HUP TERM INT
+trap '_on_error $LINENO ${PIPESTATUS[@]}' ERR
+trap '_on_exit' EXIT
+
+# Edit parse args to indicate which flags are boolean. Then pass each of those arguments to main
+function test_bool(){
+    local long="$1"
+    local short="$2"
+    shift 2
+    for t in "${@}"; do
+        arg="${t%%:*}"
+        result="${t##*:}"
+
+        for type in b bool boolean ; do
+            declare -n var=$long
+            IFS=$' \t\n'
+            parse_args $long:$short:$type -- $arg
+            r="Fail"
+            if [[ ${var:-unset} == $result ]]; then
+                r="Pass"
+            fi
+            printf "%-5s -> %s\n" $r "parse_args $long:$short:$type -- $arg"
+            echo "Got $var expected $result" >&2
+        done
+    done
+}
+
+function test_string(){
+    local long="$1"
+    local short="$2"
+    shift 2
+    for t in "${@}"; do
+        arg="${t%%:*}"
+        result="${t##*:}"
+
+        for type in s str string; do
+            IFS=$' \t\n'
+            parse_args $long:$short:$type -- $arg
+            declare -n var=$long
+            r="Fail"
+            if [[ ${var:-unset} == $result ]]; then
+                r="Pass"
+            fi
+            printf "%-5s -> %s\n" $r "parse_args $long:$short:$type -- $arg"
+            echo "Got $var expected $result" >&2
+        done
+    done
+}
+
+function test_array(){
+    local long="$1"
+    local short="$2"
+    shift 2
+    for t in "${@}"; do
+        arg="${t%%:*}"
+        result="${t##*:}"
+
+        for type in a arr array; do
+            name=()
+            IFS=$' \t\n'
+            parse_args $long:$short:$type -- $arg
+            val=$( echo ${name[@]} )
+            r="Fail"
+            if [[ ${val:-unset} == $result ]]; then
+                r="Pass"
+            fi
+            printf "%-5s -> %s\n" $r "parse_args $long:$short:$type -- $arg"
+            echo "Got $val expected $result" >&2
+        done
+    done
+}
+
+function test_defaults(){
+    parse_args -- a b c
+    if [[ $( echo ${_args[@]} ) == "a b c" ]]; then
+        echo "Pass defaults"
+    else
+        echo "Fail defaults"
+    fi
+}
+
+# test_bool dry_run d -d:true --dry-run:true --=true:true --no-dry-run:false --no-dry-run=false:true --dry-run=false:false "--dry-run true":true "--dry-run false":false "-d true":true "-d false":false
+# test_string name n "-n=bob":bob "-n bob":bob "--name bob":bob "--name=sue --name=bob":bob
+# test_array name n "-n=bob -n=harry":"bob harry" "-n bob -n harry":"bob harry" "--name bob --name harry":"bob harry" "--name=bob --name=harry":"bob harry"
+# test_defaults
+
+parse_args !url:u:string^URL^PING_URL@"https://google.com/"/"Display hello to this"  debug:d:boolean@true/"Whether to enable debugging" !name:n:string/"the users name" -- "${@}"
+
+if $debug; then
+    echo "We are debugging"
+else    
+   echo  "We are not debugging"
+fi
+
+echo "Hello $name"
+echo "Pinging $url"
+
+exit $?
+
+
