@@ -30,7 +30,7 @@ function parse_these()
         local arg_type=""
 
         local flag_regex='^([!])?([a-zA-Z0-9_-]+)(:([a-zA-Z]))?'
-        local default_help_regex='((\^([a-zA-Z_]+))*)(@(.*))?(/(.*))'
+        local default_help_regex='(((\^([a-zA-Z_]+))*)(@(.*))?(/(.*)))?'
         local regex_bool="${flag_regex}:b(ool(ean)?)?$default_help_regex$"
         local regex_array="${flag_regex}:a(rr(ay)?)?$default_help_regex$"
         local regex_string="${flag_regex}:s(tr(ing)?)?$default_help_regex$"
@@ -62,9 +62,9 @@ function parse_these()
         var_name="${long_flag}"
 
         short_flag="${BASH_REMATCH[4]}"
-        env_vars="${BASH_REMATCH[7]}"
-        default_value="${BASH_REMATCH[11]}"
-        help_text="${BASH_REMATCH[13]}"
+        env_vars="${BASH_REMATCH[8]}"
+        default_value="${BASH_REMATCH[12]}"
+        help_text="${BASH_REMATCH[14]}"
 
         env_vars=( ${env_vars//^/ } )
 
@@ -361,8 +361,10 @@ function parse_args()
         echo
         echo "Help for $( basename $0 )" 
         echo
-        printf "%s\n" "${help_messages[@]}"
-        echo
+        if [[ ${#help_messages[@]} -gt 0 ]]; then
+            printf "%s\n" "${help_messages[@]}"
+            echo
+        fi
         printf "%s\n" "${help_texts[@]}" | sort
         echo
         $error && exit 1 || exit 0
