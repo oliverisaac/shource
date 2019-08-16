@@ -9,6 +9,7 @@ function ensure_gpg_key()
     local key="$1"
     local keyservers="${2:-${GPG_KEYSERVER:-}}"
     local wait_time="${3:-10}"
+    local giveup_seconds="${4:--1}"
     local key_fetch_result=""
     local keyserver
 
@@ -20,7 +21,12 @@ function ensure_gpg_key()
         keyservers=( "" )
     fi
 
-    while true; do
+    local done_time=""
+    if [[ $giveup_seconds -ge 0 ]]; then
+        done_time=$( date +%s -d "now + $giveup_seconds seconds" )
+    fi
+
+    while [[ $done_time == "" ]] || [[ $done_time -gt $( date +%s ) ]]; do
         for keyserver in "${keyservers[@]}"; do
             local args=()
 
@@ -42,6 +48,7 @@ function ensure_gpg_key()
         sleep $wait_time
     done
 
-    return 0
+    fatal "Failed to get GPG key: $key"
+    return 1
 )}
 export -f ensure_gpg_key
