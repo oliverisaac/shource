@@ -27,19 +27,24 @@ function parse_these()
             i=$(( i + 1 ))
             break
         fi
-        local arg_type=$BOOL_TYPE
+        local arg_type=""
 
-        flag_regex='^([!])?([a-zA-Z0-9_-]+)(:([a-zA-Z]))?'
-        default_help_regex='((\^([a-zA-Z_]+))*)(@(.*))?(/(.*))'
-        regex_bool="${flag_regex}:b(ool(ean)?)?$default_help_regex$"
-        regex_array="${flag_regex}:a(rr(ay)?)?$default_help_regex$"
-        regex_string="${flag_regex}:s(tr(ing)?)?$default_help_regex$"
+        local flag_regex='^([!])?([a-zA-Z0-9_-]+)(:([a-zA-Z]))?'
+        local default_help_regex='((\^([a-zA-Z_]+))*)(@(.*))?(/(.*))'
+        local regex_bool="${flag_regex}:b(ool(ean)?)?$default_help_regex$"
+        local regex_array="${flag_regex}:a(rr(ay)?)?$default_help_regex$"
+        local regex_string="${flag_regex}:s(tr(ing)?)?$default_help_regex$"
+        local regex_help="^help_message:(.*)"
+
         if [[ $this_arg =~ ${regex_bool} ]]; then
             arg_type=$BOOL_TYPE
         elif [[ $this_arg =~ ${regex_array} ]]; then
             arg_type=$ARRAY_TYPE
         elif [[ $this_arg =~ ${regex_string} ]]; then
             arg_type=$STRING_TYPE
+        elif [[ $this_arg =~ ${regex_help} ]]; then
+            printf "%s:%s:%s:%s:%s\n" "$HELP_TYPE" "help" "$( base64 -w0 <<< "${BASH_REMATCH[1]}" )" "" ""
+            continue
         else
             log 0 "bool regex: $regex_bool"
             log 0 "array regex: $regex_array"
@@ -112,6 +117,7 @@ function parse_these()
             declare -n env_var=$var
             if [[ "${env_var:-}" != "" ]]; then
                 default_value="$env_var"
+                required_flags[$var_name]=true
             fi
         done
 
@@ -282,8 +288,9 @@ export -f parse_these
 function parse_args()
 {
     local reset_x=false
-    local ARRAY_TYPE=array BOOL_TYPE=boolean STRING_TYPE=string ERROR_TYPE=error
+    local ARRAY_TYPE=array BOOL_TYPE=boolean STRING_TYPE=string ERROR_TYPE=error HELP_TYPE=help
     local help_texts=()
+    local help_messages=()
     local error=false
 
     if [[ $- =~ x ]]; then
@@ -340,6 +347,8 @@ function parse_args()
             else
                 declare -g "$key"="$value"
             fi
+        elif [[ "$kind" == "$HELP_TYPE" ]]; then
+            help_messages+=( "$value" )
         elif [[ "$kind" == "$ERROR_TYPE" ]]; then
             log -1 "$value"; 
             error=true
@@ -351,6 +360,9 @@ function parse_args()
     if ${help:-false} || $error; then
         echo
         echo "Help for $( basename $0 )" 
+        echo
+        printf "%s\n" "${help_messages[@]}"
+        echo
         printf "%s\n" "${help_texts[@]}" | sort
         echo
         $error && exit 1 || exit 0
