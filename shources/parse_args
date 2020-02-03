@@ -224,7 +224,7 @@ function parse_these()
             key="${flag_maps[$search_key]:-}"
             [[ -z $key ]] && log -1 "Could not find $search_key as a defined argument"
 
-            if [[ $equals_value == "" ]]; then
+            if [[ $equals_part == "" ]]; then
                 if [[ $(( i + 1 )) -gt ${#input_args[@]} ]]; then
                     log -1 "You must provide a value for --$key"
                 fi
@@ -292,6 +292,8 @@ function parse_args()
     local help_texts=()
     local help_messages=()
     local error=false
+    # Default array fro arguemnts
+    export _args=()
 
     if [[ $- =~ x ]]; then
         reset_x=true
